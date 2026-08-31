@@ -26,6 +26,9 @@ Thumbs.db
 
 # Project docs (working/planning files, not shipped code)
 /project-docs/
+# Local export tooling (not shipped)
+/PROJECT_DUMP.txt
+/PROJECT_EXPORT.ps1
 
 # Temp upload/processing storage (if used locally)
 /tmp/
