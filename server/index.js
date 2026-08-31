@@ -114,7 +114,7 @@ async function main() {
   });
 
   const port = process.env.PORT || 4000;
-  await fastify.listen({ port });
+    await fastify.listen({ port, host: "0.0.0.0" });
   console.log(`Server running on port ${port}`);
 }
 
