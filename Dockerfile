@@ -25,6 +25,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     texlive-fonts-recommended \
     && rm -rf /var/lib/apt/lists/*
 
+# Python/Ruby language-package-manager installs (separate layer from apt
+# for caching/debugging clarity — these aren't apt packages)
+RUN pip3 install --no-cache-dir --break-system-packages nbconvert \
+    && gem install asciidoctor --no-document
+
 WORKDIR /app
 
 # Copy and install server dependencies first (better layer caching —
