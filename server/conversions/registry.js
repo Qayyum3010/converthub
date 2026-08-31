@@ -16,7 +16,7 @@ const CONVERSIONS = [
     to: "html",
     engine: "pandoc",
     tier: "fast",
-    implemented: false,
+    implemented: true,
   },
   {
     from: "md",
@@ -37,7 +37,7 @@ const CONVERSIONS = [
     to: "md",
     engine: "pandoc",
     tier: "fast",
-    implemented: false,
+    implemented: true,
   },
   {
     from: "html",
@@ -51,14 +51,14 @@ const CONVERSIONS = [
     to: "html",
     engine: "pandoc",
     tier: "fast",
-    implemented: false,
+    implemented: true,
   },
   {
     from: "rst",
     to: "html",
     engine: "pandoc",
     tier: "fast",
-    implemented: false,
+    implemented: true,
   },
   {
     from: "rtf",
