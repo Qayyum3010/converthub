@@ -29,6 +29,8 @@ Thumbs.db
 # Local export tooling (not shipped)
 /PROJECT_DUMP.txt
 /PROJECT_EXPORT.ps1
+# Manual test payloads (local scratch, not shipped)
+/convert-payload*.json
 
 # Temp upload/processing storage (if used locally)
 /tmp/
