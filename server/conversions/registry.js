@@ -23,14 +23,14 @@ const CONVERSIONS = [
     to: "pdf",
     engine: "pandoc",
     tier: "medium",
-    implemented: false,
+    implemented: true,
   },
   {
     from: "md",
     to: "docx",
     engine: "pandoc",
     tier: "medium",
-    implemented: false,
+    implemented: true,
   },
   {
     from: "html",
@@ -44,7 +44,7 @@ const CONVERSIONS = [
     to: "pdf",
     engine: "pandoc",
     tier: "medium",
-    implemented: false,
+    implemented: true,
   },
   {
     from: "adoc",
@@ -65,14 +65,14 @@ const CONVERSIONS = [
     to: "docx",
     engine: "pandoc",
     tier: "medium",
-    implemented: false,
+    implemented: true,
   },
   {
     from: "odt",
     to: "html",
     engine: "pandoc",
     tier: "medium",
-    implemented: false,
+    implemented: true,
   },
 
   // ---- LibreOffice headless (office document formats) ----

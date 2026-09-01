@@ -21,8 +21,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     p7zip-full \
     qpdf \
     texlive-latex-base \
+    texlive-latex-recommended \
     texlive-latex-extra \
     texlive-fonts-recommended \
+    lmodern \
     && rm -rf /var/lib/apt/lists/*
 
 # Python/Ruby language-package-manager installs (separate layer from apt
