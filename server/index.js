@@ -7,6 +7,7 @@ const { pipeline } = require("stream/promises");
 const { validatePair } = require("./conversions/registry");
 const { convertWithPandoc } = require("./conversions/pandocHandler");
 const { toPandocFormat } = require("./conversions/pandocFormats");
+const { convertWithLibreOffice } = require("./conversions/libreofficeHandler");
 const { runJob } = require("./jobRunner");
 
 const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB — matches v1 file size limit
@@ -133,7 +134,7 @@ async function main() {
 
     const { engine, tier } = validation.conversion;
 
-    if (engine !== "pandoc") {
+    if (engine !== "pandoc" && engine !== "libreoffice") {
       return reply
         .code(501)
         .send({ error: `Engine "${engine}" is not yet implemented.` });
@@ -157,9 +158,14 @@ async function main() {
 
     try {
       await runJob(async () => {
-        const fromFormat = toPandocFormat(sourceExt);
-        const toFormat = toPandocFormat(targetExt);
-        await convertWithPandoc(inputPath, outputPath, fromFormat, toFormat);
+        if (engine === "pandoc") {
+          const fromFormat = toPandocFormat(sourceExt);
+          const toFormat = toPandocFormat(targetExt);
+          await convertWithPandoc(inputPath, outputPath, fromFormat, toFormat);
+        } else if (engine === "libreoffice") {
+          const targetFormat = targetExt.replace(/^\./, "").toLowerCase();
+          await convertWithLibreOffice(inputPath, outputPath, targetFormat);
+        }
       }, tier);
     } catch (err) {
       fastify.log.error(err);
