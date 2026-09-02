@@ -184,21 +184,21 @@ const CONVERSIONS = [
     to: "html",
     engine: "nbconvert",
     tier: "medium",
-    implemented: false,
+    implemented: true,
   },
   {
     from: "ipynb",
     to: "md",
     engine: "nbconvert",
     tier: "medium",
-    implemented: false,
+    implemented: true,
   },
   {
     from: "ipynb",
     to: "docx",
     engine: "nbconvert",
-    tier: "medium",
-    implemented: false,
+    tier: "slow",
+    implemented: true,
   },
   // NOTE: ipynb -> pdf intentionally excluded (deferred, see PROJECT_OVERVIEW.md)
 

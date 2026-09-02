@@ -11,6 +11,7 @@ const { convertWithLibreOffice } = require("./conversions/libreofficeHandler");
 const { convertData } = require("./conversions/dataHandler");
 const { convertBibtexToJson } = require("./conversions/bibtexHandler");
 const { convertArchive } = require("./conversions/archiveHandler");
+const { convertNotebook } = require("./conversions/nbconvertHandler");
 const {
   validatePdf,
   mergePdfs,
@@ -151,6 +152,7 @@ async function main() {
       "data",
       "bibtex",
       "archive",
+      "nbconvert",
     ]);
     if (!SUPPORTED_ENGINES.has(engine)) {
       return reply
@@ -200,6 +202,9 @@ async function main() {
         } else if (engine === "archive") {
           const targetFormat = targetExt.replace(/^\./, "").toLowerCase();
           await convertArchive(inputPath, outputPath, targetFormat);
+        } else if (engine === "nbconvert") {
+          const targetFormat = targetExt.replace(/^\./, "").toLowerCase();
+          await convertNotebook(inputPath, outputPath, targetFormat);
         }
       }, tier);
     } catch (err) {
