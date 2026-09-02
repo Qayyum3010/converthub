@@ -22,6 +22,13 @@ const {
   comparePdfs,
 } = require("./conversions/pdfHandler");
 const { runJob } = require("./jobRunner");
+const {
+  createJob,
+  markProcessing,
+  markDone,
+  markFailed,
+  getJob,
+} = require("./jobStore");
 
 const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB — matches v1 file size limit
 
@@ -178,50 +185,54 @@ async function main() {
         .send({ error: "Uploaded file not found or expired" });
     }
 
-    try {
-      await runJob(async () => {
-        if (engine === "pandoc") {
-          const fromFormat = toPandocFormat(sourceExt);
-          const toFormat = toPandocFormat(targetExt);
-          // bibtex needs --citeproc to actually render entries as visible
-          // output — without it, Pandoc parses .bib into meta.references
-          // but produces empty body content (see DECISIONS.md).
-          const extraArgs = fromFormat === "bibtex" ? ["--citeproc"] : [];
-          await convertWithPandoc(
-            inputPath,
-            outputPath,
-            fromFormat,
-            toFormat,
-            extraArgs,
-          );
-        } else if (engine === "libreoffice") {
-          const targetFormat = targetExt.replace(/^\./, "").toLowerCase();
-          await convertWithLibreOffice(inputPath, outputPath, targetFormat);
-        } else if (engine === "data") {
-          await convertData(inputPath, outputPath, sourceExt, targetExt);
-        } else if (engine === "bibtex") {
-          await convertBibtexToJson(inputPath, outputPath);
-        } else if (engine === "archive") {
-          const targetFormat = targetExt.replace(/^\./, "").toLowerCase();
-          await convertArchive(inputPath, outputPath, targetFormat);
-        } else if (engine === "nbconvert") {
-          const targetFormat = targetExt.replace(/^\./, "").toLowerCase();
-          await convertNotebook(inputPath, outputPath, targetFormat);
-        } else if (engine === "latex") {
-          const targetFormat = targetExt.replace(/^\./, "").toLowerCase();
-          await convertLatex(inputPath, outputPath, targetFormat);
-        }
-      }, tier);
-    } catch (err) {
-      fastify.log.error(err);
-      return reply.code(500).send({ error: err.message });
-    }
+    const jobId = createJob();
 
-    return {
-      fileId,
-      outputPath,
-      targetExt,
-    };
+    // Fire-and-forget: do NOT await this. The HTTP response returns the
+    // jobId immediately; the conversion runs in the background and updates
+    // the job record via markDone/markFailed, which /job/:jobId (next
+    // subtask) will read.
+    (async () => {
+      markProcessing(jobId);
+      try {
+        await runJob(async () => {
+          if (engine === "pandoc") {
+            const fromFormat = toPandocFormat(sourceExt);
+            const toFormat = toPandocFormat(targetExt);
+            const extraArgs = fromFormat === "bibtex" ? ["--citeproc"] : [];
+            await convertWithPandoc(
+              inputPath,
+              outputPath,
+              fromFormat,
+              toFormat,
+              extraArgs,
+            );
+          } else if (engine === "libreoffice") {
+            const targetFormat = targetExt.replace(/^\./, "").toLowerCase();
+            await convertWithLibreOffice(inputPath, outputPath, targetFormat);
+          } else if (engine === "data") {
+            await convertData(inputPath, outputPath, sourceExt, targetExt);
+          } else if (engine === "bibtex") {
+            await convertBibtexToJson(inputPath, outputPath);
+          } else if (engine === "archive") {
+            const targetFormat = targetExt.replace(/^\./, "").toLowerCase();
+            await convertArchive(inputPath, outputPath, targetFormat);
+          } else if (engine === "nbconvert") {
+            const targetFormat = targetExt.replace(/^\./, "").toLowerCase();
+            await convertNotebook(inputPath, outputPath, targetFormat);
+          } else if (engine === "latex") {
+            const targetFormat = targetExt.replace(/^\./, "").toLowerCase();
+            await convertLatex(inputPath, outputPath, targetFormat);
+          }
+        }, tier);
+
+        markDone(jobId, { fileId, outputPath, targetExt });
+      } catch (err) {
+        fastify.log.error(err);
+        markFailed(jobId, err.message);
+      }
+    })();
+
+    return reply.code(202).send({ jobId });
   });
 
   // ---- PDF Tools (Task 6) ----
