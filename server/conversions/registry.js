@@ -153,13 +153,13 @@ const CONVERSIONS = [
   { from: "csv", to: "toml", engine: "data", tier: "fast", implemented: true },
 
   // ---- LaTeX / TeX Live ----
-  { from: "tex", to: "pdf", engine: "latex", tier: "slow", implemented: false },
+  { from: "tex", to: "pdf", engine: "latex", tier: "slow", implemented: true },
   {
     from: "tex",
     to: "html",
     engine: "latex",
     tier: "slow",
-    implemented: false,
+    implemented: true,
   },
 
   // ---- BibTeX ----
