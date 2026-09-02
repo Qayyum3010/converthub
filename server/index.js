@@ -429,7 +429,7 @@ async function main() {
     return reply.code(202).send({ jobId });
   });
 
-  fastify.post("/pdf/compare", async (request, reply) => {
+    fastify.post("/pdf/compare", async (request, reply) => {
     const { fileIdA, fileIdB } = request.body || {};
     if (!fileIdA || !fileIdB) {
       return reply
@@ -445,15 +445,22 @@ async function main() {
         .send({ error: "One or both uploaded files not found or expired" });
     }
 
-    try {
-      await validatePdf(pathA);
-      await validatePdf(pathB);
-      const result = await runJob(() => comparePdfs(pathA, pathB), "slow");
-      return result;
-    } catch (err) {
-      fastify.log.error(err);
-      return reply.code(500).send({ error: err.message });
-    }
+    const jobId = createJob();
+
+    (async () => {
+      markProcessing(jobId);
+      try {
+        await validatePdf(pathA);
+        await validatePdf(pathB);
+        const result = await runJob(() => comparePdfs(pathA, pathB), "slow");
+        markDone(jobId, result);
+      } catch (err) {
+        fastify.log.error(err);
+        markFailed(jobId, err.message);
+      }
+    })();
+
+    return reply.code(202).send({ jobId });
   });
 
   startCleanupJob();
