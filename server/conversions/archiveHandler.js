@@ -41,13 +41,33 @@ async function convertArchive(inputPath, outputPath, targetFormat) {
   try {
     // Step 1: extract source archive with full paths preserved
     await execFileAsync("7z", ["x", inputPath, `-o${extractDir}`, "-y"]);
-
-    const extractedEntries = await fsp.readdir(extractDir);
+    let extractedEntries = await fsp.readdir(extractDir);
     if (extractedEntries.length === 0) {
       throw new Error("Archive extracted but contained no files.");
     }
 
-    // Step 2: repack into the target format
+    // Single-stream sources (gz/bz2/xz) that were compressed via our own
+    // "tar first" fix unwrap to a single .tar file, not the real payload —
+    // extract that inner tar too so we reach the actual files, not a tar
+    // treated as if it were content. Loop (not just one extra pass) in case
+    // of doubly-wrapped inputs from elsewhere.
+    while (
+      extractedEntries.length === 1 &&
+      extractedEntries[0].toLowerCase().endsWith(".tar")
+    ) {
+      const innerTarPath = path.join(extractDir, extractedEntries[0]);
+      await execFileAsync("7z", ["x", innerTarPath, `-o${extractDir}`, "-y"]);
+      await fsp.unlink(innerTarPath);
+      extractedEntries = await fsp.readdir(extractDir);
+    }
+
+    // Single-stream compressors (gz/bz2/xz) can only compress ONE input —
+    // 7z hard-errors (E_INVALIDARG) if given multiple files. Standard
+    // practice is to tar the contents first, then compress the tar stream
+    // (the .tar.gz pattern), so we do that unconditionally for these
+    // formats rather than special-casing single- vs multi-file inputs.
+    const SINGLE_STREAM_FORMATS = new Set(["gz", "bz2", "xz"]);
+
     if (targetFormat === "tar") {
       // Use native tar for tar output (see file header note above)
       await execFileAsync("tar", [
@@ -57,6 +77,17 @@ async function convertArchive(inputPath, outputPath, targetFormat) {
         extractDir,
         ...extractedEntries,
       ]);
+    } else if (SINGLE_STREAM_FORMATS.has(targetFormat)) {
+      const tarScratchPath = path.join(scratchDir, "bundle.tar");
+      await execFileAsync("tar", [
+        "-cf",
+        tarScratchPath,
+        "-C",
+        extractDir,
+        ...extractedEntries,
+      ]);
+      // 7z infers compressor from outputPath's extension
+      await execFileAsync("7z", ["a", outputPath, tarScratchPath, "-y"]);
     } else {
       // 7z infers archive type from outputPath's extension (zip, 7z, etc.)
       await execFileAsync("7z", [
