@@ -208,21 +208,21 @@ const CONVERSIONS = [
     to: "7z",
     engine: "archive",
     tier: "medium",
-    implemented: false,
+    implemented: true,
   },
   {
     from: "7z",
     to: "zip",
     engine: "archive",
     tier: "medium",
-    implemented: false,
+    implemented: true,
   },
   {
     from: "tar",
     to: "zip",
     engine: "archive",
     tier: "medium",
-    implemented: false,
+    implemented: true,
   },
 ];
 

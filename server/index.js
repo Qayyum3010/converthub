@@ -10,6 +10,7 @@ const { toPandocFormat } = require("./conversions/pandocFormats");
 const { convertWithLibreOffice } = require("./conversions/libreofficeHandler");
 const { convertData } = require("./conversions/dataHandler");
 const { convertBibtexToJson } = require("./conversions/bibtexHandler");
+const { convertArchive } = require("./conversions/archiveHandler");
 const { runJob } = require("./jobRunner");
 
 const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB — matches v1 file size limit
@@ -141,6 +142,7 @@ async function main() {
       "libreoffice",
       "data",
       "bibtex",
+      "archive",
     ]);
     if (!SUPPORTED_ENGINES.has(engine)) {
       return reply
@@ -187,6 +189,9 @@ async function main() {
           await convertData(inputPath, outputPath, sourceExt, targetExt);
         } else if (engine === "bibtex") {
           await convertBibtexToJson(inputPath, outputPath);
+        } else if (engine === "archive") {
+          const targetFormat = targetExt.replace(/^\./, "").toLowerCase();
+          await convertArchive(inputPath, outputPath, targetFormat);
         }
       }, tier);
     } catch (err) {
