@@ -368,25 +368,48 @@ async function analyzePdf(inputPath) {
  * @param {string} pathB - absolute path to second PDF
  * @returns {Promise<object>} - { linesOnlyInA, linesOnlyInB, identical }
  */
+const { diffLines } = require("diff");
+
+/**
+ * Compares two PDFs' extracted text via a true sequence-aware line diff
+ * (Myers algorithm, via the `diff` package) — NOT a Set-membership check.
+ * This correctly distinguishes "same lines, different order/count" from
+ * genuinely identical documents, unlike a naive Set-based approach.
+ *
+ * @param {string} pathA - absolute path to first PDF
+ * @param {string} pathB - absolute path to second PDF
+ * @returns {Promise<object>} - { identical, linesOnlyInA, linesOnlyInB }
+ */
 async function comparePdfs(pathA, pathB) {
   const [a, b] = await Promise.all([
     getTextAndMetadata(pathA),
     getTextAndMetadata(pathB),
   ]);
 
-  const linesA = a.text
+  const textA = a.text
     .split("\n")
     .map((l) => l.trim())
-    .filter(Boolean);
-  const linesB = b.text
+    .filter(Boolean)
+    .join("\n");
+  const textB = b.text
     .split("\n")
     .map((l) => l.trim())
-    .filter(Boolean);
-  const setB = new Set(linesB);
-  const setA = new Set(linesA);
+    .filter(Boolean)
+    .join("\n");
 
-  const linesOnlyInA = linesA.filter((l) => !setB.has(l));
-  const linesOnlyInB = linesB.filter((l) => !setA.has(l));
+  const changes = diffLines(textA, textB);
+
+  const linesOnlyInA = [];
+  const linesOnlyInB = [];
+
+  for (const part of changes) {
+    const lines = part.value.split("\n").filter(Boolean);
+    if (part.removed) {
+      linesOnlyInA.push(...lines);
+    } else if (part.added) {
+      linesOnlyInB.push(...lines);
+    }
+  }
 
   return {
     identical: linesOnlyInA.length === 0 && linesOnlyInB.length === 0,
