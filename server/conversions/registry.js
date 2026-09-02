@@ -153,12 +153,20 @@ const CONVERSIONS = [
   { from: "csv", to: "toml", engine: "data", tier: "fast", implemented: true },
 
   // ---- LaTeX / TeX Live ----
+  // ---- LaTeX / TeX Live ----
   { from: "tex", to: "pdf", engine: "latex", tier: "slow", implemented: true },
   {
     from: "tex",
     to: "html",
     engine: "latex",
     tier: "slow",
+    implemented: true,
+  },
+  {
+    from: "tex",
+    to: "docx",
+    engine: "pandoc",
+    tier: "medium",
     implemented: true,
   },
 

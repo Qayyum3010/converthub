@@ -13,6 +13,7 @@ const EXT_TO_PANDOC_FORMAT = {
   docx: "docx",
   pdf: "pdf", // note: pandoc can only write pdf via a LaTeX engine, not read it
   bib: "bibtex",
+  tex: "latex", // added for tex->docx (Pandoc's native LaTeX reader) — note tex->pdf/html still go through latexHandler.js's dedicated engine, not this map
 };
 
 function toPandocFormat(ext) {
