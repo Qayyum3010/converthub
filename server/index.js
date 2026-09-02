@@ -339,7 +339,7 @@ async function main() {
 
     try {
       await validatePdf(inputPath);
-      const report = await runJob(() => analyzePdf(inputPath), "medium");
+      const report = await runJob(() => analyzePdf(inputPath), "slow");
       return report;
     } catch (err) {
       fastify.log.error(err);
@@ -366,7 +366,7 @@ async function main() {
     try {
       await validatePdf(pathA);
       await validatePdf(pathB);
-      const result = await runJob(() => comparePdfs(pathA, pathB), "medium");
+      const result = await runJob(() => comparePdfs(pathA, pathB), "slow");
       return result;
     } catch (err) {
       fastify.log.error(err);

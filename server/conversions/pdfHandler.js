@@ -17,6 +17,7 @@ const { promisify } = require("util");
 const fs = require("fs/promises");
 const execFileAsync = promisify(execFile);
 const pdfParse = require("pdf-parse");
+const { extractTextViaOCR } = require("./ocrHandler");
 
 /**
  * Validates a PDF before any processing — catches corrupt files, encrypted
@@ -223,14 +224,38 @@ async function getStructuralInfo(inputPath) {
  * @param {string} inputPath - absolute path to the PDF
  * @returns {Promise<object>} - { text, author, title, createdDate }
  */
+/**
+ * Extracts raw text and Author/Title/CreationDate metadata via pdf-parse.
+ * Falls back to OCR (ocrHandler.js) when pdf-parse returns empty/whitespace-
+ * only text — this happens for scanned/image-only PDFs, which have no
+ * embedded text layer for pdf-parse to find at all.
+ * @param {string} inputPath - absolute path to the PDF
+ * @returns {Promise<object>} - { text, author, title, createdDate, ocrUsed }
+ */
 async function getTextAndMetadata(inputPath) {
   const buffer = await fs.readFile(inputPath);
   const data = await pdfParse(buffer);
+
+  const embeddedText = data.text || "";
+  let text = embeddedText;
+  let ocrUsed = false;
+
+  if (embeddedText.trim().length === 0) {
+    // No embedded text layer — likely a scanned/image-only PDF. Metadata
+    // (Author/Title/CreationDate) still comes from pdf-parse above, since
+    // that lives in the PDF's info dictionary regardless of whether the
+    // page content is text or images; only the text extraction itself
+    // needs the OCR fallback.
+    text = await extractTextViaOCR(inputPath);
+    ocrUsed = true;
+  }
+
   return {
-    text: data.text,
+    text,
     author: data.info?.Author || null,
     title: data.info?.Title || null,
     createdDate: data.info?.CreationDate || null,
+    ocrUsed,
   };
 }
 
