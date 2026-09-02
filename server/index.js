@@ -30,6 +30,8 @@ const {
   getJob,
 } = require("./jobStore");
 
+const { startCleanupJob } = require("./cleanup");
+
 const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB — matches v1 file size limit
 
 const ALLOWED_EXTENSIONS = new Set([
@@ -246,6 +248,36 @@ async function main() {
     return job;
   });
 
+    fastify.get("/download/:jobId", async (request, reply) => {
+    const { jobId } = request.params;
+    const job = getJob(jobId);
+
+    if (!job) {
+      return reply.code(404).send({ error: "Job not found" });
+    }
+
+    if (job.status !== "done") {
+      return reply
+        .code(409)
+        .send({ error: `Job is not ready for download (status: ${job.status})` });
+    }
+
+    const { outputPath, fileId, targetExt } = job.result;
+
+    if (!fs.existsSync(outputPath)) {
+      return reply
+        .code(410)
+        .send({ error: "File has expired or was already deleted" });
+    }
+
+    const downloadName = `converted-${fileId}.${targetExt}`;
+    reply.header(
+      "Content-Disposition",
+      `attachment; filename="${downloadName}"`,
+    );
+    return reply.send(fs.createReadStream(outputPath));
+  });
+
   // ---- PDF Tools (Task 6) ----
   // Direct operations, not registry.js format-pair conversions — separate
   // routes rather than /convert.
@@ -395,6 +427,8 @@ async function main() {
       return reply.code(500).send({ error: err.message });
     }
   });
+
+  startCleanupJob();
 
   const port = process.env.PORT || 4000;
   await fastify.listen({ port, host: "0.0.0.0" });
