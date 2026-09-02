@@ -257,11 +257,9 @@ async function main() {
     }
 
     if (job.status !== "done") {
-      return reply
-        .code(409)
-        .send({
-          error: `Job is not ready for download (status: ${job.status})`,
-        });
+      return reply.code(409).send({
+        error: `Job is not ready for download (status: ${job.status})`,
+      });
     }
 
     const { outputPath, fileId, targetExt } = job.result;
@@ -348,15 +346,24 @@ async function main() {
     const outputId = crypto.randomUUID();
     const outputPath = path.join(tempDir, `${outputId}-split.pdf`);
 
-    try {
-      await validatePdf(inputPath);
-      await runJob(() => splitPdf(inputPath, outputPath, pageRange), "medium");
-    } catch (err) {
-      fastify.log.error(err);
-      return reply.code(500).send({ error: err.message });
-    }
+    const jobId = createJob();
 
-    return { fileId: outputId, outputPath };
+    (async () => {
+      markProcessing(jobId);
+      try {
+        await validatePdf(inputPath);
+        await runJob(
+          () => splitPdf(inputPath, outputPath, pageRange),
+          "medium",
+        );
+        markDone(jobId, { fileId: outputId, outputPath, targetExt: "pdf" });
+      } catch (err) {
+        fastify.log.error(err);
+        markFailed(jobId, err.message);
+      }
+    })();
+
+    return reply.code(202).send({ jobId });
   });
 
   fastify.post("/pdf/compress", async (request, reply) => {
