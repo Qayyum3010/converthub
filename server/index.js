@@ -412,14 +412,21 @@ async function main() {
         .send({ error: "Uploaded file not found or expired" });
     }
 
-    try {
-      await validatePdf(inputPath);
-      const report = await runJob(() => analyzePdf(inputPath), "slow");
-      return report;
-    } catch (err) {
-      fastify.log.error(err);
-      return reply.code(500).send({ error: err.message });
-    }
+    const jobId = createJob();
+
+    (async () => {
+      markProcessing(jobId);
+      try {
+        await validatePdf(inputPath);
+        const report = await runJob(() => analyzePdf(inputPath), "slow");
+        markDone(jobId, report);
+      } catch (err) {
+        fastify.log.error(err);
+        markFailed(jobId, err.message);
+      }
+    })();
+
+    return reply.code(202).send({ jobId });
   });
 
   fastify.post("/pdf/compare", async (request, reply) => {
