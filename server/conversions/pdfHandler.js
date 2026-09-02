@@ -19,6 +19,80 @@ const execFileAsync = promisify(execFile);
 const pdfParse = require("pdf-parse");
 
 /**
+ * Validates a PDF before any processing — catches corrupt files, encrypted
+ * files (unsupported, no password flow in v1), and a cheap page-count cap
+ * as a resource-exhaustion guard. Called at the top of every /pdf/* route
+ * handler before the real operation runs.
+ *
+ * @param {string} inputPath - absolute path to the PDF to validate
+ * @returns {Promise<void>} - resolves if valid, throws with a clear message otherwise
+ */
+const MAX_PDF_PAGES = 2000;
+
+async function validatePdf(inputPath) {
+  let checkOut = "";
+  try {
+    const result = await execFileAsync("qpdf", ["--check", inputPath]);
+    checkOut = result.stdout;
+  } catch (err) {
+    // qpdf --check exits non-zero for both recoverable warnings and hard
+    // failures — inspect stdout/stderr rather than treating any non-zero
+    // exit as fatal, same pattern as getStructuralInfo()'s linearization check.
+    checkOut = err.stdout || "";
+    const stderr = err.stderr || "";
+
+    // Verified against a real qpdf 11.3.0 test: an encrypted PDF we don't
+    // have the password for fails --check with "invalid password" in
+    // stderr, NOT a "file is encrypted" note in stdout — the earlier
+    // stdout-matching approach never fired. Check stderr directly instead.
+    if (/invalid password/i.test(stderr)) {
+      throw new Error(
+        "Password-protected PDFs are not supported. Please upload an unencrypted PDF.",
+      );
+    }
+
+    if (
+      /no such file|not a pdf|file is damaged|error/i.test(stderr) &&
+      !checkOut
+    ) {
+      throw new Error(
+        `File is not a valid PDF or is corrupted: ${stderr.trim() || err.message}`,
+      );
+    }
+  }
+
+  // Kept as a secondary net: some encryption scenarios (e.g. an empty user
+  // password that --check can actually open) may surface a "file is
+  // encrypted" note in stdout rather than failing outright. Untested against
+  // a real fixture so far — not deleting on a hunch, just documenting that
+  // the "invalid password" branch above is the one we've actually verified.
+  if (/file is encrypted/i.test(checkOut)) {
+    throw new Error(
+      "Password-protected PDFs are not supported. Please upload an unencrypted PDF.",
+    );
+  }
+
+  try {
+    const { stdout: jsonOut } = await execFileAsync("qpdf", [
+      "--json",
+      inputPath,
+    ]);
+    const parsed = JSON.parse(jsonOut);
+    const pageCount = parsed.pages ? parsed.pages.length : 0;
+    if (pageCount > MAX_PDF_PAGES) {
+      throw new Error(
+        `PDF has ${pageCount} pages, exceeding the ${MAX_PDF_PAGES}-page limit.`,
+      );
+    }
+  } catch (err) {
+    if (err.message.includes("exceeding the")) {
+      throw err; // our own page-limit error, re-throw as-is
+    }
+    throw new Error(`Could not read PDF structure: ${err.message}`);
+  }
+}
+
+/**
  * Merges multiple PDFs into one, in the given order.
  *
  * @param {string[]} inputPaths - absolute paths to source PDFs, in merge order
@@ -297,6 +371,7 @@ async function comparePdfs(pathA, pathB) {
 }
 
 module.exports = {
+  validatePdf,
   mergePdfs,
   splitPdf,
   compressPdf,

@@ -12,6 +12,7 @@ const { convertData } = require("./conversions/dataHandler");
 const { convertBibtexToJson } = require("./conversions/bibtexHandler");
 const { convertArchive } = require("./conversions/archiveHandler");
 const {
+  validatePdf,
   mergePdfs,
   splitPdf,
   compressPdf,
@@ -245,6 +246,9 @@ async function main() {
     const outputPath = path.join(tempDir, `${outputId}-merged.pdf`);
 
     try {
+      for (const p of inputPaths) {
+        await validatePdf(p);
+      }
       await runJob(() => mergePdfs(inputPaths, outputPath), "medium");
     } catch (err) {
       fastify.log.error(err);
@@ -273,6 +277,7 @@ async function main() {
     const outputPath = path.join(tempDir, `${outputId}-split.pdf`);
 
     try {
+      await validatePdf(inputPath);
       await runJob(() => splitPdf(inputPath, outputPath, pageRange), "medium");
     } catch (err) {
       fastify.log.error(err);
@@ -299,6 +304,7 @@ async function main() {
     const outputPath = path.join(tempDir, `${outputId}-compressed.pdf`);
 
     try {
+      await validatePdf(inputPath);
       await runJob(() => compressPdf(inputPath, outputPath), "medium");
     } catch (err) {
       fastify.log.error(err);
@@ -322,6 +328,7 @@ async function main() {
     }
 
     try {
+      await validatePdf(inputPath);
       const report = await runJob(() => analyzePdf(inputPath), "medium");
       return report;
     } catch (err) {
@@ -347,6 +354,8 @@ async function main() {
     }
 
     try {
+      await validatePdf(pathA);
+      await validatePdf(pathB);
       const result = await runJob(() => comparePdfs(pathA, pathB), "medium");
       return result;
     } catch (err) {
