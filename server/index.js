@@ -382,15 +382,21 @@ async function main() {
     const outputId = crypto.randomUUID();
     const outputPath = path.join(tempDir, `${outputId}-compressed.pdf`);
 
-    try {
-      await validatePdf(inputPath);
-      await runJob(() => compressPdf(inputPath, outputPath), "medium");
-    } catch (err) {
-      fastify.log.error(err);
-      return reply.code(500).send({ error: err.message });
-    }
+    const jobId = createJob();
 
-    return { fileId: outputId, outputPath };
+    (async () => {
+      markProcessing(jobId);
+      try {
+        await validatePdf(inputPath);
+        await runJob(() => compressPdf(inputPath, outputPath), "medium");
+        markDone(jobId, { fileId: outputId, outputPath, targetExt: "pdf" });
+      } catch (err) {
+        fastify.log.error(err);
+        markFailed(jobId, err.message);
+      }
+    })();
+
+    return reply.code(202).send({ jobId });
   });
 
   fastify.post("/pdf/analyze", async (request, reply) => {
