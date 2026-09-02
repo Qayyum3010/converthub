@@ -12,6 +12,7 @@ const EXT_TO_PANDOC_FORMAT = {
   odt: "odt",
   docx: "docx",
   pdf: "pdf", // note: pandoc can only write pdf via a LaTeX engine, not read it
+  bib: "bibtex",
 };
 
 function toPandocFormat(ext) {

@@ -9,6 +9,7 @@ const { convertWithPandoc } = require("./conversions/pandocHandler");
 const { toPandocFormat } = require("./conversions/pandocFormats");
 const { convertWithLibreOffice } = require("./conversions/libreofficeHandler");
 const { convertData } = require("./conversions/dataHandler");
+const { convertBibtexToJson } = require("./conversions/bibtexHandler");
 const { runJob } = require("./jobRunner");
 
 const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB — matches v1 file size limit
@@ -135,7 +136,12 @@ async function main() {
 
     const { engine, tier } = validation.conversion;
 
-    const SUPPORTED_ENGINES = new Set(["pandoc", "libreoffice", "data"]);
+    const SUPPORTED_ENGINES = new Set([
+      "pandoc",
+      "libreoffice",
+      "data",
+      "bibtex",
+    ]);
     if (!SUPPORTED_ENGINES.has(engine)) {
       return reply
         .code(501)
@@ -163,12 +169,24 @@ async function main() {
         if (engine === "pandoc") {
           const fromFormat = toPandocFormat(sourceExt);
           const toFormat = toPandocFormat(targetExt);
-          await convertWithPandoc(inputPath, outputPath, fromFormat, toFormat);
+          // bibtex needs --citeproc to actually render entries as visible
+          // output — without it, Pandoc parses .bib into meta.references
+          // but produces empty body content (see DECISIONS.md).
+          const extraArgs = fromFormat === "bibtex" ? ["--citeproc"] : [];
+          await convertWithPandoc(
+            inputPath,
+            outputPath,
+            fromFormat,
+            toFormat,
+            extraArgs,
+          );
         } else if (engine === "libreoffice") {
           const targetFormat = targetExt.replace(/^\./, "").toLowerCase();
           await convertWithLibreOffice(inputPath, outputPath, targetFormat);
         } else if (engine === "data") {
           await convertData(inputPath, outputPath, sourceExt, targetExt);
+        } else if (engine === "bibtex") {
+          await convertBibtexToJson(inputPath, outputPath);
         }
       }, tier);
     } catch (err) {

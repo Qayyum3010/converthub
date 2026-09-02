@@ -166,16 +166,16 @@ const CONVERSIONS = [
   {
     from: "bib",
     to: "html",
-    engine: "bibtex",
+    engine: "pandoc",
     tier: "fast",
-    implemented: false,
+    implemented: true,
   },
   {
     from: "bib",
     to: "json",
     engine: "bibtex",
     tier: "fast",
-    implemented: false,
+    implemented: true,
   },
 
   // ---- Jupyter (nbconvert) ----

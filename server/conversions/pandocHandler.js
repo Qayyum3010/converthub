@@ -14,7 +14,13 @@ const execFileAsync = promisify(execFile);
  * @param {string} toFormat - Pandoc format name for the target (e.g. "html")
  * @returns {Promise<void>}
  */
-async function convertWithPandoc(inputPath, outputPath, fromFormat, toFormat) {
+async function convertWithPandoc(
+  inputPath,
+  outputPath,
+  fromFormat,
+  toFormat,
+  extraArgs = [],
+) {
   try {
     await execFileAsync("pandoc", [
       inputPath,
@@ -24,6 +30,7 @@ async function convertWithPandoc(inputPath, outputPath, fromFormat, toFormat) {
       toFormat,
       "-o",
       outputPath,
+      ...extraArgs,
     ]);
   } catch (err) {
     // Pandoc writes useful detail to stderr on failure (e.g. malformed
