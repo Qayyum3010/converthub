@@ -141,12 +141,14 @@ async function main() {
   });
 
   fastify.post("/convert", async (request, reply) => {
-    const { fileId, sourceExt, targetExt } = request.body || {};
+    const { fileId, fileIds, sourceExt, targetExt } = request.body || {};
+    const idList = Array.isArray(fileIds) ? fileIds : fileId ? [fileId] : [];
 
-    if (!fileId || !sourceExt || !targetExt) {
-      return reply
-        .code(400)
-        .send({ error: "fileId, sourceExt, and targetExt are required" });
+    if (idList.length === 0 || !sourceExt || !targetExt) {
+      return reply.code(400).send({
+        error:
+          "fileId (or fileIds array), sourceExt, and targetExt are required",
+      });
     }
 
     const validation = validatePair(sourceExt, targetExt);
@@ -172,65 +174,115 @@ async function main() {
     }
 
     const tempDir = path.join(os.tmpdir(), "converthub-uploads");
-    const inputPath = path.join(
-      tempDir,
-      `${fileId}.${sourceExt.replace(/^\./, "")}`,
-    );
-    const outputPath = path.join(
-      tempDir,
-      `${fileId}-out.${targetExt.replace(/^\./, "")}`,
-    );
 
-    if (!fs.existsSync(inputPath)) {
-      return reply
-        .code(404)
-        .send({ error: "Uploaded file not found or expired" });
+    const jobFiles = idList.map((id) => ({
+      fileId: id,
+      inputPath: path.join(tempDir, `${id}.${sourceExt.replace(/^\./, "")}`),
+      outputPath: path.join(
+        tempDir,
+        `${id}-out.${targetExt.replace(/^\./, "")}`,
+      ),
+    }));
+
+    const missing = jobFiles.filter((f) => !fs.existsSync(f.inputPath));
+    if (missing.length > 0) {
+      return reply.code(404).send({
+        error: `Uploaded file(s) not found or expired: ${missing
+          .map((f) => f.fileId)
+          .join(", ")}`,
+      });
     }
 
     const jobId = createJob();
+    const isBatch = idList.length > 1;
+
+    async function convertOne(inputPath, outputPath) {
+      if (engine === "pandoc") {
+        const fromFormat = toPandocFormat(sourceExt);
+        const toFormat = toPandocFormat(targetExt);
+        const extraArgs = fromFormat === "bibtex" ? ["--citeproc"] : [];
+        await convertWithPandoc(
+          inputPath,
+          outputPath,
+          fromFormat,
+          toFormat,
+          extraArgs,
+        );
+      } else if (engine === "libreoffice") {
+        const targetFormat = targetExt.replace(/^\./, "").toLowerCase();
+        await convertWithLibreOffice(inputPath, outputPath, targetFormat);
+      } else if (engine === "data") {
+        await convertData(inputPath, outputPath, sourceExt, targetExt);
+      } else if (engine === "bibtex") {
+        await convertBibtexToJson(inputPath, outputPath);
+      } else if (engine === "archive") {
+        const targetFormat = targetExt.replace(/^\./, "").toLowerCase();
+        await convertArchive(inputPath, outputPath, targetFormat);
+      } else if (engine === "nbconvert") {
+        const targetFormat = targetExt.replace(/^\./, "").toLowerCase();
+        await convertNotebook(inputPath, outputPath, targetFormat);
+      } else if (engine === "latex") {
+        const targetFormat = targetExt.replace(/^\./, "").toLowerCase();
+        await convertLatex(inputPath, outputPath, targetFormat);
+      }
+    }
 
     // Fire-and-forget: do NOT await this. The HTTP response returns the
-    // jobId immediately; the conversion runs in the background and updates
-    // the job record via markDone/markFailed, which /job/:jobId (next
-    // subtask) will read.
+    // jobId immediately; conversion(s) run in the background and update
+    // the job record via markDone/markFailed, which /job/:jobId reads.
     (async () => {
       markProcessing(jobId);
-      try {
-        await runJob(async () => {
-          if (engine === "pandoc") {
-            const fromFormat = toPandocFormat(sourceExt);
-            const toFormat = toPandocFormat(targetExt);
-            const extraArgs = fromFormat === "bibtex" ? ["--citeproc"] : [];
-            await convertWithPandoc(
-              inputPath,
-              outputPath,
-              fromFormat,
-              toFormat,
-              extraArgs,
-            );
-          } else if (engine === "libreoffice") {
-            const targetFormat = targetExt.replace(/^\./, "").toLowerCase();
-            await convertWithLibreOffice(inputPath, outputPath, targetFormat);
-          } else if (engine === "data") {
-            await convertData(inputPath, outputPath, sourceExt, targetExt);
-          } else if (engine === "bibtex") {
-            await convertBibtexToJson(inputPath, outputPath);
-          } else if (engine === "archive") {
-            const targetFormat = targetExt.replace(/^\./, "").toLowerCase();
-            await convertArchive(inputPath, outputPath, targetFormat);
-          } else if (engine === "nbconvert") {
-            const targetFormat = targetExt.replace(/^\./, "").toLowerCase();
-            await convertNotebook(inputPath, outputPath, targetFormat);
-          } else if (engine === "latex") {
-            const targetFormat = targetExt.replace(/^\./, "").toLowerCase();
-            await convertLatex(inputPath, outputPath, targetFormat);
-          }
-        }, tier);
 
-        markDone(jobId, { fileId, outputPath, targetExt });
-      } catch (err) {
-        fastify.log.error(err);
-        markFailed(jobId, err.message);
+      if (!isBatch) {
+        // Single-file path: keep the original flat result shape so
+        // existing callers/tests (and /download/:jobId) are unaffected.
+        try {
+          await runJob(
+            () => convertOne(jobFiles[0].inputPath, jobFiles[0].outputPath),
+            tier,
+          );
+          markDone(jobId, {
+            fileId: jobFiles[0].fileId,
+            outputPath: jobFiles[0].outputPath,
+            targetExt,
+          });
+        } catch (err) {
+          fastify.log.error(err);
+          markFailed(jobId, err.message);
+        }
+        return;
+      }
+
+      // Batch path: run each file independently; one failure doesn't
+      // fail the others. Aggregate per-file status into job.result.
+      const results = [];
+      for (const f of jobFiles) {
+        try {
+          await runJob(() => convertOne(f.inputPath, f.outputPath), tier);
+          results.push({
+            fileId: f.fileId,
+            outputPath: f.outputPath,
+            targetExt,
+            status: "done",
+          });
+        } catch (err) {
+          fastify.log.error(err);
+          results.push({
+            fileId: f.fileId,
+            status: "failed",
+            error: err.message,
+          });
+        }
+      }
+
+      const allSucceeded = results.every((r) => r.status === "done");
+      // Batch job is only marked "failed" overall if every file failed;
+      // partial success still resolves as "done" so the client can poll
+      // once and see per-file status in the result.
+      if (results.some((r) => r.status === "done")) {
+        markDone(jobId, { files: results, allSucceeded });
+      } else {
+        markFailed(jobId, "All files in batch failed to convert");
       }
     })();
 
@@ -262,6 +314,48 @@ async function main() {
       });
     }
 
+    // Batch result: zip only the successfully-produced files. A batch job
+    // with zero successes is never marked "done" (see /convert, /pdf/compress
+    // — all-failed batches call markFailed instead), so this array is
+    // guaranteed non-empty here.
+    if (Array.isArray(job.result.files)) {
+      const successFiles = job.result.files.filter(
+        (f) => f.status === "done" && fs.existsSync(f.outputPath),
+      );
+
+      if (successFiles.length === 0) {
+        return reply
+          .code(410)
+          .send({ error: "All result files have expired or were deleted" });
+      }
+
+      const archiver = require("archiver");
+      const archive = archiver("zip", { zlib: { level: 9 } });
+
+      reply.header(
+        "Content-Disposition",
+        `attachment; filename="converthub-batch-${jobId}.zip"`,
+      );
+      reply.header("Content-Type", "application/zip");
+
+      archive.on("error", (err) => {
+        fastify.log.error(err);
+        // Headers are likely already sent by the time archiver errors
+        // mid-stream; destroy the response rather than trying to send a
+        // JSON error at this point.
+        reply.raw.destroy(err);
+      });
+
+      for (const f of successFiles) {
+        const ext = f.targetExt || "pdf";
+        archive.file(f.outputPath, { name: `${f.fileId}.${ext}` });
+      }
+
+      archive.finalize();
+      return reply.send(archive);
+    }
+
+    // Single-file result: unchanged from before.
     const { outputPath, fileId, targetExt } = job.result;
 
     if (!fs.existsSync(outputPath)) {
@@ -367,32 +461,83 @@ async function main() {
   });
 
   fastify.post("/pdf/compress", async (request, reply) => {
-    const { fileId } = request.body || {};
-    if (!fileId) {
-      return reply.code(400).send({ error: "fileId is required" });
-    }
+    const { fileId, fileIds } = request.body || {};
+    const idList = Array.isArray(fileIds) ? fileIds : fileId ? [fileId] : [];
 
-    const inputPath = resolveUploadPath(fileId, "pdf");
-    if (!fs.existsSync(inputPath)) {
+    if (idList.length === 0) {
       return reply
-        .code(404)
-        .send({ error: "Uploaded file not found or expired" });
+        .code(400)
+        .send({ error: "fileId (or fileIds array) is required" });
     }
 
-    const outputId = crypto.randomUUID();
-    const outputPath = path.join(tempDir, `${outputId}-compressed.pdf`);
+    const jobFiles = idList.map((id) => ({
+      fileId: id,
+      inputPath: resolveUploadPath(id, "pdf"),
+    }));
+
+    const missing = jobFiles.filter((f) => !fs.existsSync(f.inputPath));
+    if (missing.length > 0) {
+      return reply.code(404).send({
+        error: `Uploaded file(s) not found or expired: ${missing
+          .map((f) => f.fileId)
+          .join(", ")}`,
+      });
+    }
 
     const jobId = createJob();
+    const isBatch = idList.length > 1;
+
+    async function compressOne(f) {
+      const outputId = crypto.randomUUID();
+      const outputPath = path.join(tempDir, `${outputId}-compressed.pdf`);
+      await validatePdf(f.inputPath);
+      await runJob(() => compressPdf(f.inputPath, outputPath), "medium");
+      return outputPath;
+    }
 
     (async () => {
       markProcessing(jobId);
-      try {
-        await validatePdf(inputPath);
-        await runJob(() => compressPdf(inputPath, outputPath), "medium");
-        markDone(jobId, { fileId: outputId, outputPath, targetExt: "pdf" });
-      } catch (err) {
-        fastify.log.error(err);
-        markFailed(jobId, err.message);
+
+      if (!isBatch) {
+        try {
+          const outputPath = await compressOne(jobFiles[0]);
+          markDone(jobId, {
+            fileId: jobFiles[0].fileId,
+            outputPath,
+            targetExt: "pdf",
+          });
+        } catch (err) {
+          fastify.log.error(err);
+          markFailed(jobId, err.message);
+        }
+        return;
+      }
+
+      const results = [];
+      for (const f of jobFiles) {
+        try {
+          const outputPath = await compressOne(f);
+          results.push({
+            fileId: f.fileId,
+            outputPath,
+            targetExt: "pdf",
+            status: "done",
+          });
+        } catch (err) {
+          fastify.log.error(err);
+          results.push({
+            fileId: f.fileId,
+            status: "failed",
+            error: err.message,
+          });
+        }
+      }
+
+      const allSucceeded = results.every((r) => r.status === "done");
+      if (results.some((r) => r.status === "done")) {
+        markDone(jobId, { files: results, allSucceeded });
+      } else {
+        markFailed(jobId, "All files in batch failed to compress");
       }
     })();
 
@@ -429,7 +574,7 @@ async function main() {
     return reply.code(202).send({ jobId });
   });
 
-    fastify.post("/pdf/compare", async (request, reply) => {
+  fastify.post("/pdf/compare", async (request, reply) => {
     const { fileIdA, fileIdB } = request.body || {};
     if (!fileIdA || !fileIdB) {
       return reply
