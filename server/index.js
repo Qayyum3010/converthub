@@ -235,6 +235,17 @@ async function main() {
     return reply.code(202).send({ jobId });
   });
 
+  fastify.get("/job/:jobId", async (request, reply) => {
+    const { jobId } = request.params;
+    const job = getJob(jobId);
+
+    if (!job) {
+      return reply.code(404).send({ error: "Job not found" });
+    }
+
+    return job;
+  });
+
   // ---- PDF Tools (Task 6) ----
   // Direct operations, not registry.js format-pair conversions — separate
   // routes rather than /convert.
