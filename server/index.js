@@ -248,7 +248,7 @@ async function main() {
     return job;
   });
 
-    fastify.get("/download/:jobId", async (request, reply) => {
+  fastify.get("/download/:jobId", async (request, reply) => {
     const { jobId } = request.params;
     const job = getJob(jobId);
 
@@ -259,7 +259,9 @@ async function main() {
     if (job.status !== "done") {
       return reply
         .code(409)
-        .send({ error: `Job is not ready for download (status: ${job.status})` });
+        .send({
+          error: `Job is not ready for download (status: ${job.status})`,
+        });
     }
 
     const { outputPath, fileId, targetExt } = job.result;
@@ -309,17 +311,23 @@ async function main() {
     const outputId = crypto.randomUUID();
     const outputPath = path.join(tempDir, `${outputId}-merged.pdf`);
 
-    try {
-      for (const p of inputPaths) {
-        await validatePdf(p);
-      }
-      await runJob(() => mergePdfs(inputPaths, outputPath), "medium");
-    } catch (err) {
-      fastify.log.error(err);
-      return reply.code(500).send({ error: err.message });
-    }
+    const jobId = createJob();
 
-    return { fileId: outputId, outputPath };
+    (async () => {
+      markProcessing(jobId);
+      try {
+        for (const p of inputPaths) {
+          await validatePdf(p);
+        }
+        await runJob(() => mergePdfs(inputPaths, outputPath), "medium");
+        markDone(jobId, { fileId: outputId, outputPath, targetExt: "pdf" });
+      } catch (err) {
+        fastify.log.error(err);
+        markFailed(jobId, err.message);
+      }
+    })();
+
+    return reply.code(202).send({ jobId });
   });
 
   fastify.post("/pdf/split", async (request, reply) => {
