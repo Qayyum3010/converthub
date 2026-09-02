@@ -11,6 +11,13 @@ const { convertWithLibreOffice } = require("./conversions/libreofficeHandler");
 const { convertData } = require("./conversions/dataHandler");
 const { convertBibtexToJson } = require("./conversions/bibtexHandler");
 const { convertArchive } = require("./conversions/archiveHandler");
+const {
+  mergePdfs,
+  splitPdf,
+  compressPdf,
+  analyzePdf,
+  comparePdfs,
+} = require("./conversions/pdfHandler");
 const { runJob } = require("./jobRunner");
 
 const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB — matches v1 file size limit
@@ -204,6 +211,148 @@ async function main() {
       outputPath,
       targetExt,
     };
+  });
+
+  // ---- PDF Tools (Task 6) ----
+  // Direct operations, not registry.js format-pair conversions — separate
+  // routes rather than /convert.
+
+  const tempDir = path.join(os.tmpdir(), "converthub-uploads");
+
+  function resolveUploadPath(fileId, ext) {
+    return path.join(tempDir, `${fileId}.${ext.replace(/^\./, "")}`);
+  }
+
+  fastify.post("/pdf/merge", async (request, reply) => {
+    const { fileIds } = request.body || {};
+    if (!Array.isArray(fileIds) || fileIds.length < 2) {
+      return reply.code(400).send({
+        error:
+          "fileIds must be an array of at least 2 file IDs, in merge order",
+      });
+    }
+
+    const inputPaths = fileIds.map((id) => resolveUploadPath(id, "pdf"));
+    for (const p of inputPaths) {
+      if (!fs.existsSync(p)) {
+        return reply
+          .code(404)
+          .send({ error: `Uploaded file not found or expired: ${p}` });
+      }
+    }
+
+    const outputId = crypto.randomUUID();
+    const outputPath = path.join(tempDir, `${outputId}-merged.pdf`);
+
+    try {
+      await runJob(() => mergePdfs(inputPaths, outputPath), "medium");
+    } catch (err) {
+      fastify.log.error(err);
+      return reply.code(500).send({ error: err.message });
+    }
+
+    return { fileId: outputId, outputPath };
+  });
+
+  fastify.post("/pdf/split", async (request, reply) => {
+    const { fileId, pageRange } = request.body || {};
+    if (!fileId || !pageRange) {
+      return reply
+        .code(400)
+        .send({ error: "fileId and pageRange are required" });
+    }
+
+    const inputPath = resolveUploadPath(fileId, "pdf");
+    if (!fs.existsSync(inputPath)) {
+      return reply
+        .code(404)
+        .send({ error: "Uploaded file not found or expired" });
+    }
+
+    const outputId = crypto.randomUUID();
+    const outputPath = path.join(tempDir, `${outputId}-split.pdf`);
+
+    try {
+      await runJob(() => splitPdf(inputPath, outputPath, pageRange), "medium");
+    } catch (err) {
+      fastify.log.error(err);
+      return reply.code(500).send({ error: err.message });
+    }
+
+    return { fileId: outputId, outputPath };
+  });
+
+  fastify.post("/pdf/compress", async (request, reply) => {
+    const { fileId } = request.body || {};
+    if (!fileId) {
+      return reply.code(400).send({ error: "fileId is required" });
+    }
+
+    const inputPath = resolveUploadPath(fileId, "pdf");
+    if (!fs.existsSync(inputPath)) {
+      return reply
+        .code(404)
+        .send({ error: "Uploaded file not found or expired" });
+    }
+
+    const outputId = crypto.randomUUID();
+    const outputPath = path.join(tempDir, `${outputId}-compressed.pdf`);
+
+    try {
+      await runJob(() => compressPdf(inputPath, outputPath), "medium");
+    } catch (err) {
+      fastify.log.error(err);
+      return reply.code(500).send({ error: err.message });
+    }
+
+    return { fileId: outputId, outputPath };
+  });
+
+  fastify.post("/pdf/analyze", async (request, reply) => {
+    const { fileId } = request.body || {};
+    if (!fileId) {
+      return reply.code(400).send({ error: "fileId is required" });
+    }
+
+    const inputPath = resolveUploadPath(fileId, "pdf");
+    if (!fs.existsSync(inputPath)) {
+      return reply
+        .code(404)
+        .send({ error: "Uploaded file not found or expired" });
+    }
+
+    try {
+      const report = await runJob(() => analyzePdf(inputPath), "medium");
+      return report;
+    } catch (err) {
+      fastify.log.error(err);
+      return reply.code(500).send({ error: err.message });
+    }
+  });
+
+  fastify.post("/pdf/compare", async (request, reply) => {
+    const { fileIdA, fileIdB } = request.body || {};
+    if (!fileIdA || !fileIdB) {
+      return reply
+        .code(400)
+        .send({ error: "fileIdA and fileIdB are required" });
+    }
+
+    const pathA = resolveUploadPath(fileIdA, "pdf");
+    const pathB = resolveUploadPath(fileIdB, "pdf");
+    if (!fs.existsSync(pathA) || !fs.existsSync(pathB)) {
+      return reply
+        .code(404)
+        .send({ error: "One or both uploaded files not found or expired" });
+    }
+
+    try {
+      const result = await runJob(() => comparePdfs(pathA, pathB), "medium");
+      return result;
+    } catch (err) {
+      fastify.log.error(err);
+      return reply.code(500).send({ error: err.message });
+    }
   });
 
   const port = process.env.PORT || 4000;
