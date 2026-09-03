@@ -1,10 +1,13 @@
-require("dotenv").config();
+require("dotenv").config({ quiet: true });
 const path = require("path");
 const fs = require("fs");
 const os = require("os");
 const crypto = require("crypto");
 const { pipeline } = require("stream/promises");
-const { validatePair } = require("./conversions/registry");
+const {
+  validatePair,
+  getImplementedFormats,
+} = require("./conversions/registry");
 const { convertWithPandoc } = require("./conversions/pandocHandler");
 const { toPandocFormat } = require("./conversions/pandocFormats");
 const { convertWithLibreOffice } = require("./conversions/libreofficeHandler");
@@ -96,6 +99,10 @@ async function main() {
 
   fastify.get("/health", async (request, reply) => {
     return { status: "ok", service: "converthub-server" };
+  });
+
+  fastify.get("/formats", async (request, reply) => {
+    return getImplementedFormats();
   });
 
   fastify.post("/upload", async (request, reply) => {

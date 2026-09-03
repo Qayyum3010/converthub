@@ -35,3 +35,5 @@ Thumbs.db
 # Temp upload/processing storage (if used locally)
 /tmp/
 /uploads/
+
+client/.env.local

@@ -1,6 +1,11 @@
+"use client";
+
+import { useRouter } from "next/navigation";
 import Header from "./components/Header";
 import Footer from "./components/Footer";
 import UploadZone from "./components/UploadZone";
+import { useConversion } from "./context/ConversionContext";
+import Link from "next/link";
 
 const popularConversions: { from: string; to: string }[] = [
   { from: "MD", to: "PDF" },
@@ -10,6 +15,14 @@ const popularConversions: { from: string; to: string }[] = [
 ];
 
 export default function Home() {
+  const router = useRouter();
+  const { setPresetTargetExt } = useConversion();
+
+  const selectPopularPair = (targetExt: string) => {
+    setPresetTargetExt(targetExt.toLowerCase());
+    router.push("/convert");
+  };
+
   return (
     <>
       <Header />
@@ -32,10 +45,11 @@ export default function Home() {
           <h3 className="font-label-sm text-xs md:text-sm text-on-surface-variant uppercase tracking-wider mb-sm text-center">
             Popular Conversions
           </h3>
-          <div className="flex flex-wrap justify-center gap-xs md:gap-sm">
+          <div className="flex flex-wrap justify-center gap-xs md:gap-sm mb-sm">
             {popularConversions.map((pair) => (
               <button
                 key={`${pair.from}-${pair.to}`}
+                onClick={() => selectPopularPair(pair.to)}
                 className="flex items-center gap-1.5 bg-surface-container-low hover:bg-surface-container active:scale-95 px-sm md:px-md py-xs rounded-full border border-outline-variant transition-all duration-150 group"
               >
                 <span className="font-technical-mono text-xs md:text-sm text-error">
@@ -49,6 +63,14 @@ export default function Home() {
                 </span>
               </button>
             ))}
+          </div>
+          <div className="text-center">
+            <Link
+              href="/all-conversions"
+              className="font-label-sm text-sm text-primary hover:underline underline-offset-4"
+            >
+              View all conversions →
+            </Link>
           </div>
         </div>
 

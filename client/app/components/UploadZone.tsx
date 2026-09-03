@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useConversion } from "../context/ConversionContext";
 
 const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB — matches server/index.js
 
@@ -8,19 +10,25 @@ export default function UploadZone() {
   const [isDragging, setIsDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const router = useRouter();
+  const { setFile } = useConversion();
 
-  const handleFiles = useCallback((files: FileList | null) => {
-    if (!files || files.length === 0) return;
-    const file = files[0];
+  const handleFiles = useCallback(
+    (files: FileList | null) => {
+      if (!files || files.length === 0) return;
+      const file = files[0];
 
-    if (file.size > MAX_FILE_SIZE) {
-      setError(`"${file.name}" exceeds the 20MB limit.`);
-      return;
-    }
+      if (file.size > MAX_FILE_SIZE) {
+        setError(`"${file.name}" exceeds the 20MB limit.`);
+        return;
+      }
 
-    setError(null);
-    // TODO (Task 9): route to Conversion Workspace with the selected file
-  }, []);
+      setError(null);
+      setFile(file);
+      router.push("/convert");
+    },
+    [setFile, router],
+  );
 
   const onDrop = useCallback(
     (e: React.DragEvent<HTMLDivElement>) => {

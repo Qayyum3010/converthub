@@ -411,4 +411,19 @@ function validatePair(from, to) {
   return { valid: true, conversion: match };
 }
 
-module.exports = { CONVERSIONS, findConversion, validatePair };
+function getImplementedFormats() {
+  const map = {};
+  for (const c of CONVERSIONS) {
+    if (!c.implemented) continue;
+    if (!map[c.from]) map[c.from] = [];
+    map[c.from].push(c.to);
+  }
+  return map;
+}
+
+module.exports = {
+  CONVERSIONS,
+  findConversion,
+  validatePair,
+  getImplementedFormats,
+};
