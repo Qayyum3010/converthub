@@ -23,7 +23,12 @@ const execFileAsync = promisify(execFile);
  * @param {string} targetFormat - LibreOffice --convert-to filter/extension (e.g. "pdf", "csv", "odp")
  * @returns {Promise<void>}
  */
-async function convertWithLibreOffice(inputPath, outputPath, targetFormat) {
+async function convertWithLibreOffice(
+  inputPath,
+  outputPath,
+  targetFormat,
+  infilter = null,
+) {
   // Isolated scratch dir per job — avoids collisions if multiple jobs with
   // the same input basename run concurrently, and keeps --outdir predictable.
   const scratchDir = path.join(
@@ -33,15 +38,35 @@ async function convertWithLibreOffice(inputPath, outputPath, targetFormat) {
   );
   fs.mkdirSync(scratchDir, { recursive: true });
 
+  // LibreOffice headless uses a single shared user-profile lock by default —
+  // concurrent soffice invocations fight over it, and the loser exits early
+  // printing only the harmless "javaldx" startup warning as its sole stderr
+  // output, which then gets mistaken for the real error. Isolating the
+  // profile per invocation (same idea as the already-isolated scratchDir)
+  // eliminates the lock contention entirely. Verified against a real
+  // concurrent docx+html overlap, 2026-09-03 — see DECISIONS.md.
+  const profileDir = path.join(scratchDir, "loprofile");
+
+  // Some inputs (notably PDF) have no unambiguous default LibreOffice
+  // document type — a PDF opened with no filter specified defaults to
+  // Draw, which can export HTML but silently produces nothing for a
+  // Writer-only target like DOCX (soffice exits 0 either way).
+  //
+  // NOTE: the `format:filtername` suffix on --convert-to sets the EXPORT
+  // filter, not the import filter — that was the bug in the first attempt
+  // (docx:writer_pdf_import silently no-ops since writer_pdf_import isn't
+  // a valid docx export filter). Forcing the *import* path requires the
+  // separate --infilter CLI flag instead. See DECISIONS.md, 2026-09-03.
+  const args = ["--headless", `-env:UserInstallation=file://${profileDir}`];
+
+  if (infilter) {
+    args.push(`--infilter=${infilter}`);
+  }
+
+  args.push("--convert-to", targetFormat, "--outdir", scratchDir, inputPath);
+
   try {
-    await execFileAsync("soffice", [
-      "--headless",
-      "--convert-to",
-      targetFormat,
-      "--outdir",
-      scratchDir,
-      inputPath,
-    ]);
+    await execFileAsync("soffice", args);
 
     const inputBasename = path.basename(inputPath, path.extname(inputPath));
     const producedPath = path.join(

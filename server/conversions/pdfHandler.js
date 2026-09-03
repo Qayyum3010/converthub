@@ -16,8 +16,305 @@ const { execFile } = require("child_process");
 const { promisify } = require("util");
 const fs = require("fs/promises");
 const execFileAsync = promisify(execFile);
+
+/**
+ * pdf.js's getOperatorList()/commonObjs never populates font descriptor
+ * flags (bold/italic) for this build — confirmed via diagnostic logging,
+ * see DECISIONS.md 2026-09-03 (follow-up 7): the promise resolves cleanly,
+ * it just doesn't fill in the data, so there's no error to catch or fix.
+ *
+ * Workaround: shell out to poppler's `pdffonts`, which reads real font
+ * names (e.g. "LMRoman10-Bold") straight from the PDF's font descriptors.
+ * We then correlate pdf.js's local per-page resource keys (fontName like
+ * "g_d1_f9") to pdffonts' real names ordinally — by the order each local
+ * key is FIRST seen during text extraction, matched against pdffonts'
+ * listing order (ascending object ID). This works because both orderings
+ * normally follow first-definition/first-use order in the content stream.
+ *
+ * KNOWN LIMITATION: this is a heuristic, not a guaranteed mapping. PDFs
+ * with unusual font-definition ordering (fonts defined out of use-order,
+ * heavy font subsetting/reuse across pages) can misalign it. Documented
+ * 2026-09-03 (follow-up 8) as an accepted trade-off — see DECISIONS.md.
+ */
+async function getFontStyleResolver(pdfPath) {
+  let stdout;
+  try {
+    ({ stdout } = await execFileAsync("pdffonts", [pdfPath]));
+  } catch (err) {
+    console.log("[pdffonts error]", (err && err.stack) || err);
+    return { resolve: () => ({ isBold: false, isItalic: false }) };
+  }
+
+  const lines = stdout
+    .split("\n")
+    .slice(2) // skip header + separator row
+    .filter((l) => l.trim().length > 0);
+
+  const orderedFonts = lines.map((line) => {
+    const name = line.trim().split(/\s+/)[0] || "";
+    return {
+      name,
+      isBold: /-?bold/i.test(name),
+      isItalic: /-?italic|-?oblique/i.test(name),
+    };
+  });
+
+  const localKeyToIndex = new Map();
+  let nextIndex = 0;
+
+  return {
+    resolve(localFontName) {
+      if (!localKeyToIndex.has(localFontName)) {
+        if (nextIndex < orderedFonts.length) {
+          localKeyToIndex.set(localFontName, nextIndex);
+          nextIndex += 1;
+        } else {
+          // more local keys than pdffonts entries — can happen; fall back
+          localKeyToIndex.set(localFontName, orderedFonts.length - 1);
+        }
+      }
+      const idx = localKeyToIndex.get(localFontName);
+      return orderedFonts[idx] || { isBold: false, isItalic: false };
+    },
+  };
+}
+
+// pdf-parse bundles an old pdf.js (v1.10.100) that assumes a browser DOM.
+// Earlier follow-ups relied on getOperatorList() to force font-descriptor
+// resolution, which triggered pdf.js's FontLoader trying to register real
+// @font-face rules via document.createElement('style') — a browser-only
+// API that doesn't exist in Node and crashed the process from inside an
+// internal pdf.js callback our try/catch never saw. That path has since
+// been abandoned in favor of pdffonts-based style detection (follow-up 8),
+// but this shim is left in place defensively in case any other part of
+// pdf-parse/pdf.js still probes for `document` during normal parsing.
+// See DECISIONS.md, 2026-09-03 (follow-up 3, follow-up 5).
+if (typeof global.document === "undefined") {
+  const noop = () => {};
+  const fakeHead = { appendChild: noop, remove: noop };
+  global.document = {
+    createElement: () => ({
+      sheet: { insertRule: noop, cssRules: [] },
+      style: {},
+      setAttribute: noop,
+      appendChild: noop,
+      remove: noop,
+    }),
+    documentElement: {
+      appendChild: noop,
+      getElementsByTagName: () => [fakeHead],
+    },
+    fonts: undefined,
+  };
+}
+
 const pdfParse = require("pdf-parse");
 const { extractTextViaOCR } = require("./ocrHandler");
+
+// pdf-parse's default text join only inserts a newline on a vertical
+// position jump — it never inserts a space for a horizontal gap between
+// adjacent text runs on the same line. Since many PDFs split a line into
+// several runs (different font, style, or just how the PDF was generated),
+// this silently mashes words together ("a text-based PDF" -> "atext-basedPDF").
+// This custom pagerender walks pdf.js's raw text items ourselves and adds
+// a space whenever the horizontal gap between runs is wide enough to be a
+// real word boundary. See DECISIONS.md, 2026-09-03.
+//
+// `withFormatting: true` additionally inspects each item's fontName for
+// bold/italic/oblique and wraps runs in markdown emphasis markers, and
+// normalizes bullet characters into markdown list syntax. This is ONLY
+// used for the /convert pipeline (pdfConvertHandler.js) — plain
+// getTextAndMetadata() output (used by Analyze/Compare/txt) stays
+// unformatted, since markdown syntax in those would corrupt keyword
+// extraction and diffing.
+function makeTextRenderer({
+  withFormatting = false,
+  fontResolver = null,
+} = {}) {
+  return function renderPage(pageData) {
+    // getOperatorList() previously called here to force pdf.js to resolve
+    // font descriptors into commonObjs — abandoned 2026-09-03 (follow-up 8)
+    // once diagnostic logging confirmed it never populates that data for
+    // this pdf.js build regardless. Styling now comes entirely from
+    // pdffonts via detectStyle()/getFontStyleResolver. Removed to avoid
+    // the extra parse pass for no benefit. See DECISIONS.md.
+    return pageData
+      .getTextContent({
+        normalizeWhitespace: false,
+        disableCombineTextItems: false,
+      })
+      .then((textContent) => {
+        const lines = []; // { text, maxHeight }
+        let current = { text: "", maxHeight: 0 };
+        let lastY = null;
+        let lastXEnd = null;
+
+        const pushLine = () => {
+          lines.push(current);
+          current = { text: "", maxHeight: 0 };
+        };
+
+        for (const item of textContent.items) {
+          const x = item.transform[4];
+          const y = item.transform[5];
+          const height = item.height || Math.abs(item.transform[3]) || 10;
+          const runTextRaw = item.str;
+
+          if (lastY !== null && Math.abs(y - lastY) > height * 0.5) {
+            const hyphenMatch = /[A-Za-z]-$/.test(current.text);
+            const nextStartsLower = /^[a-z]/.test(runTextRaw);
+            if (hyphenMatch && nextStartsLower) {
+              current.text = current.text.slice(0, -1);
+            } else {
+              pushLine();
+            }
+            lastXEnd = null;
+          } else if (lastXEnd !== null) {
+            const gap = x - lastXEnd;
+            if (gap > height * 0.25) current.text += " ";
+          }
+
+          let runText = runTextRaw;
+          if (withFormatting && runText.trim()) {
+            const { isBold, isItalic } = detectStyle(item, fontResolver);
+            if (isBold && isItalic) runText = `***${runText}***`;
+            else if (isBold) runText = `**${runText}**`;
+            else if (isItalic) runText = `*${runText}*`;
+          }
+
+          current.text += runText;
+          current.maxHeight = Math.max(current.maxHeight, height);
+          lastY = y;
+          lastXEnd = x + (item.width || 0);
+        }
+        pushLine();
+
+        if (withFormatting) markHeadings(lines);
+
+        // Pandoc's markdown reader requires a blank line before (and
+        // after) an ATX "## heading" line to recognize it as a heading
+        // block — without it, the "##" is read as literal characters
+        // glued onto the surrounding paragraph. markHeadings() only adds
+        // the "## " prefix; this pass adds the blank lines Pandoc needs
+        // around any line that got marked as a heading. See DECISIONS.md,
+        // 2026-09-03 (follow-up 9).
+        const spacedLines = [];
+        lines.forEach((line, i) => {
+          const isHeading = /^##\s/.test(line.text);
+          if (
+            isHeading &&
+            spacedLines.length &&
+            spacedLines[spacedLines.length - 1].trim() !== ""
+          ) {
+            spacedLines.push("");
+          }
+          spacedLines.push(line.text);
+          const nextLine = lines[i + 1];
+          if (isHeading && nextLine && nextLine.text.trim() !== "") {
+            spacedLines.push("");
+          }
+        });
+
+        const pageText = spacedLines.join("\n");
+        return stripTrailingPageNumber(pageText);
+      });
+  };
+}
+
+// A PDF has no semantic "this is a heading" flag — just bigger text. This
+// flags lines whose font size is meaningfully larger than the page's
+// typical body-text size as a markdown heading ("## "), so Pandoc renders
+// them as real Word headings instead of plain paragraphs.
+//
+// Threshold lowered from 1.3x to 1.15x based on real measured data from
+// our test PDF: body text sits at 9.96, "Section Two" (which should be
+// a heading) sits at 11.96 -- a 1.20x ratio that 1.3x was missing
+// entirely. 1.15x catches it while still sitting above the next-
+// closest body-text outlier in the same doc (10.16, a 1.02x ratio,
+// safely excluded). See DECISIONS.md, 2026-09-03 (follow-up 7).
+function markHeadings(lines) {
+  const heights = lines
+    .filter((l) => l.text.trim())
+    .map((l) => l.maxHeight)
+    .sort((a, b) => a - b);
+  if (heights.length < 2) return;
+  const median = heights[Math.floor(heights.length / 2)];
+  if (!median) return;
+
+  for (const line of lines) {
+    const trimmed = line.text.trim();
+    if (!trimmed) continue;
+    if (/^[•·▪‣]/.test(trimmed)) continue;
+    if (line.maxHeight >= median * 1.15) {
+      line.text = `## ${trimmed}`;
+    }
+  }
+}
+
+// Bold/italic detection via poppler's pdffonts CLI, correlated ordinally
+// to pdf.js's local per-page resource keys. Verified 2026-09-03 against
+// the text-based.pdf test fixture: every run (heading bold, inline bold,
+// inline italic, regular body, bullet glyphs) matched the known-correct
+// answer. pdf.js's own commonObjs/getOperatorList path never populates
+// font descriptor flags for this build (confirmed via diagnostic logging,
+// follow-up 7) — it isn't used as a signal here anymore, only as a last-
+// resort fallback if pdffonts itself fails to run (see
+// getFontStyleResolver's catch, which returns a resolver defaulting to
+// {isBold: false, isItalic: false}). See DECISIONS.md, 2026-09-03
+// (follow-up 8).
+//
+// KNOWN LIMITATION: the ordinal correlation assumes pdf.js's first-use
+// order matches pdffonts' object-ID order. Holds for normally-generated
+// PDFs; can misalign on PDFs with unusual font-definition ordering.
+function detectStyle(item, fontResolver) {
+  if (!fontResolver || !item.fontName) {
+    return { isBold: false, isItalic: false };
+  }
+  const { isBold, isItalic } = fontResolver.resolve(item.fontName);
+  return { isBold, isItalic };
+}
+
+// Strips a trailing standalone page-number line (footer artifact) from a
+// page's extracted text — e.g. a lone "1" or "23" on its own final line.
+// Deliberately narrow (last line only, 1-4 digits) to avoid eating
+// legitimate numeric content elsewhere in the body. See DECISIONS.md,
+// 2026-09-03 (follow-up).
+function stripTrailingPageNumber(pageText) {
+  const lines = pageText.split("\n");
+  while (lines.length && lines[lines.length - 1].trim() === "") lines.pop();
+  if (lines.length && /^\d{1,4}$/.test(lines[lines.length - 1].trim())) {
+    lines.pop();
+  }
+  return lines.join("\n");
+}
+
+// Normalizes common bullet glyphs into markdown list syntax, and ensures a
+// blank line precedes the first item of a run (Pandoc requires a blank
+// line before a list to recognize it as one, not a paragraph).
+function normalizeMarkdownLists(text) {
+  const lines = text.split("\n");
+  const result = [];
+  let prevWasListItem = false;
+  for (const line of lines) {
+    const trimmed = line.trim();
+    const bulletMatch = /^[•·▪‣]\s*/.exec(trimmed);
+    if (bulletMatch) {
+      if (
+        !prevWasListItem &&
+        result.length &&
+        result[result.length - 1].trim() !== ""
+      ) {
+        result.push("");
+      }
+      result.push("- " + trimmed.slice(bulletMatch[0].length));
+      prevWasListItem = true;
+    } else {
+      result.push(line);
+      prevWasListItem = false;
+    }
+  }
+  return result.join("\n");
+}
 
 /**
  * Validates a PDF before any processing — catches corrupt files, encrypted
@@ -221,11 +518,6 @@ async function getStructuralInfo(inputPath) {
 
 /**
  * Extracts raw text and Author/Title/CreationDate metadata via pdf-parse.
- * @param {string} inputPath - absolute path to the PDF
- * @returns {Promise<object>} - { text, author, title, createdDate }
- */
-/**
- * Extracts raw text and Author/Title/CreationDate metadata via pdf-parse.
  * Falls back to OCR (ocrHandler.js) when pdf-parse returns empty/whitespace-
  * only text — this happens for scanned/image-only PDFs, which have no
  * embedded text layer for pdf-parse to find at all.
@@ -234,7 +526,7 @@ async function getStructuralInfo(inputPath) {
  */
 async function getTextAndMetadata(inputPath) {
   const buffer = await fs.readFile(inputPath);
-  const data = await pdfParse(buffer);
+  const data = await pdfParse(buffer, { pagerender: makeTextRenderer() });
 
   const embeddedText = data.text || "";
   let text = embeddedText;
@@ -363,14 +655,6 @@ async function analyzePdf(inputPath) {
 }
 
 /**
- * Compares two PDFs' extracted text and returns a simple line-level diff.
- * @param {string} pathA - absolute path to first PDF
- * @param {string} pathB - absolute path to second PDF
- * @returns {Promise<object>} - { linesOnlyInA, linesOnlyInB, identical }
- */
-const { diffLines } = require("diff");
-
-/**
  * Compares two PDFs' extracted text via a true sequence-aware line diff
  * (Myers algorithm, via the `diff` package) — NOT a Set-membership check.
  * This correctly distinguishes "same lines, different order/count" from
@@ -380,6 +664,8 @@ const { diffLines } = require("diff");
  * @param {string} pathB - absolute path to second PDF
  * @returns {Promise<object>} - { identical, linesOnlyInA, linesOnlyInB }
  */
+const { diffLines } = require("diff");
+
 async function comparePdfs(pathA, pathB) {
   const [a, b] = await Promise.all([
     getTextAndMetadata(pathA),
@@ -418,7 +704,32 @@ async function comparePdfs(pathA, pathB) {
   };
 }
 
+/**
+ * Like getTextAndMetadata, but returns markdown-formatted text (bold/italic
+ * markers from font-name inspection, bullet lines normalized into markdown
+ * list syntax) instead of plain text. Used only by the /convert pipeline
+ * for PDF->docx/md, where Pandoc will render the markup into real
+ * document formatting. Do NOT use this for Analyze/Compare/txt — those
+ * need clean plain text, not markdown syntax mixed in. See DECISIONS.md,
+ * 2026-09-03.
+ *
+ * @param {string} inputPath - absolute path to the source PDF
+ * @returns {Promise<string>}
+ */
+async function getFormattedMarkdown(inputPath) {
+  const buffer = await fs.readFile(inputPath);
+  // Built once per document (not per page) so the ordinal local-key ->
+  // real-font-name mapping in getFontStyleResolver stays consistent
+  // across every page's callback. See DECISIONS.md, 2026-09-03 (follow-up 8).
+  const fontResolver = await getFontStyleResolver(inputPath);
+  const data = await pdfParse(buffer, {
+    pagerender: makeTextRenderer({ withFormatting: true, fontResolver }),
+  });
+  return normalizeMarkdownLists(data.text || "");
+}
+
 module.exports = {
+  getFormattedMarkdown,
   validatePdf,
   mergePdfs,
   splitPdf,
@@ -427,4 +738,5 @@ module.exports = {
   getTextAndMetadata,
   analyzePdf,
   comparePdfs,
+  getFontStyleResolver,
 };

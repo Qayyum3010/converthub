@@ -16,6 +16,7 @@ const { convertBibtexToJson } = require("./conversions/bibtexHandler");
 const { convertArchive } = require("./conversions/archiveHandler");
 const { convertNotebook } = require("./conversions/nbconvertHandler");
 const { convertLatex } = require("./conversions/latexHandler");
+const { convertPdfSource } = require("./conversions/pdfConvertHandler");
 const {
   validatePdf,
   mergePdfs,
@@ -173,6 +174,7 @@ async function main() {
       "archive",
       "nbconvert",
       "latex",
+      "pdfConvert",
     ]);
     if (!SUPPORTED_ENGINES.has(engine)) {
       return reply
@@ -198,6 +200,16 @@ async function main() {
           .map((f) => f.fileId)
           .join(", ")}`,
       });
+    }
+
+    if (engine === "pdfConvert") {
+      for (const f of jobFiles) {
+        try {
+          await validatePdf(f.inputPath);
+        } catch (err) {
+          return reply.code(400).send({ error: err.message });
+        }
+      }
     }
 
     const jobId = createJob();
@@ -231,6 +243,14 @@ async function main() {
       } else if (engine === "latex") {
         const targetFormat = targetExt.replace(/^\./, "").toLowerCase();
         await convertLatex(inputPath, outputPath, targetFormat);
+      } else if (engine === "pdfConvert") {
+        // validatePdf() gate happens once, at the top of the request,
+        // not per-file in this loop — see Step 3 below.
+        const targetFormat = targetExt.replace(/^\./, "").toLowerCase();
+        // Only pdfConvert returns extra metadata (ocrUsed) right now — other
+        // engines' convertOne branches return undefined, which is fine, the
+        // spread below just contributes nothing for them.
+        return await convertPdfSource(inputPath, outputPath, targetFormat);
       }
     }
 
@@ -244,7 +264,7 @@ async function main() {
         // Single-file path: keep the original flat result shape so
         // existing callers/tests (and /download/:jobId) are unaffected.
         try {
-          await runJob(
+          const extra = await runJob(
             () => convertOne(jobFiles[0].inputPath, jobFiles[0].outputPath),
             tier,
           );
@@ -252,6 +272,7 @@ async function main() {
             fileId: jobFiles[0].fileId,
             outputPath: jobFiles[0].outputPath,
             targetExt,
+            ...(extra || {}),
           });
         } catch (err) {
           fastify.log.error(err);
@@ -265,12 +286,16 @@ async function main() {
       const results = [];
       for (const f of jobFiles) {
         try {
-          await runJob(() => convertOne(f.inputPath, f.outputPath), tier);
+          const extra = await runJob(
+            () => convertOne(f.inputPath, f.outputPath),
+            tier,
+          );
           results.push({
             fileId: f.fileId,
             outputPath: f.outputPath,
             targetExt,
             status: "done",
+            ...(extra || {}),
           });
         } catch (err) {
           fastify.log.error(err);

@@ -210,6 +210,40 @@ const CONVERSIONS = [
   },
   // NOTE: ipynb -> pdf intentionally excluded (deferred, see PROJECT_OVERVIEW.md)
 
+  // ---- PDF as source (Task 5.6) ----
+  // Handled by pdfConvertHandler.js, not pdfHandler.js (which owns the
+  // dedicated PDF Tools merge/split/compress/compare/analyze endpoints).
+  // All four auto-OCR scanned/image PDFs via the same Tesseract fallback
+  // Analyze already uses — see DECISIONS.md, 2026-09-03.
+  {
+    from: "pdf",
+    to: "txt",
+    engine: "pdfConvert",
+    tier: "slow",
+    implemented: true,
+  },
+  {
+    from: "pdf",
+    to: "docx",
+    engine: "pdfConvert",
+    tier: "slow",
+    implemented: true,
+  },
+  {
+    from: "pdf",
+    to: "html",
+    engine: "pdfConvert",
+    tier: "slow",
+    implemented: true,
+  },
+  {
+    from: "pdf",
+    to: "md",
+    engine: "pdfConvert",
+    tier: "slow",
+    implemented: true,
+  },
+
   // ---- Archives ----
   {
     from: "zip",

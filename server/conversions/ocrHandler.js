@@ -17,7 +17,11 @@ const path = require("path");
 const os = require("os");
 const execFileAsync = promisify(execFile);
 
-const OCR_DPI = 200; // balance of text legibility vs. per-page processing time/memory
+const OCR_DPI = 300; // bumped from 200 — 200 was producing word-boundary
+// spacing errors ("This isa", "Ithas noembedded") on real OCR output.
+// 300 is the commonly-recommended DPI floor for reliable Tesseract accuracy;
+// trades some per-page processing time for meaningfully better text quality.
+// See DECISIONS.md, 2026-09-03.
 const MAX_OCR_PAGES = 50; // hard cap — OCR is slow per-page, prevents a huge scanned PDF from hanging a request indefinitely
 
 /**
@@ -74,7 +78,16 @@ async function ocrPageImage(imagePath) {
   // file output base rather than "stdout" as the second arg.
   const outputBase = imagePath.replace(/\.png$/, "");
   try {
-    await execFileAsync("tesseract", [imagePath, outputBase]);
+    // preserve_interword_spaces=1 stops Tesseract from collapsing
+    // adjacent-but-distinct words when its own layout heuristics are
+    // uncertain about a gap — a contributing factor in the word-mashing
+    // artifact seen at DPI 200. See DECISIONS.md, 2026-09-03.
+    await execFileAsync("tesseract", [
+      imagePath,
+      outputBase,
+      "-c",
+      "preserve_interword_spaces=1",
+    ]);
   } catch (err) {
     const detail = err.stderr ? err.stderr.trim() : err.message;
     throw new Error(`OCR failed on page image: ${detail}`);
