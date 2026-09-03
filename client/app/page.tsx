@@ -1,69 +1,78 @@
-import Image from "next/image";
+import Header from "./components/Header";
+import Footer from "./components/Footer";
+import UploadZone from "./components/UploadZone";
+
+const popularConversions: { from: string; to: string }[] = [
+  { from: "MD", to: "PDF" },
+  { from: "DOCX", to: "PDF" },
+  { from: "CSV", to: "JSON" },
+  { from: "XLSX", to: "CSV" },
+];
 
 export default function Home() {
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
+    <>
+      <Header />
+      <main className="flex-grow w-full max-w-[1200px] mx-auto px-sm md:px-md xl:px-xl py-lg md:py-xl flex flex-col items-center">
+        {/* Hero */}
+        <div className="text-center mb-lg md:mb-xl w-full max-w-3xl">
+          <h1 className="font-display-lg text-3xl md:text-5xl font-bold text-on-surface mb-sm leading-tight">
+            Convert any file, instantly
           </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+          <p className="font-body-lg text-base md:text-lg text-on-surface-variant">
+            Free, no sign-up, files deleted automatically after 1 hour.
           </p>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
+
+        {/* Upload zone */}
+        <UploadZone />
+
+        {/* Popular conversions — real registry pairs only */}
+        <div className="w-full max-w-4xl mb-lg md:mb-xl mt-lg md:mt-xl">
+          <h3 className="font-label-sm text-xs md:text-sm text-on-surface-variant uppercase tracking-wider mb-sm text-center">
+            Popular Conversions
+          </h3>
+          <div className="flex flex-wrap justify-center gap-xs md:gap-sm">
+            {popularConversions.map((pair) => (
+              <button
+                key={`${pair.from}-${pair.to}`}
+                className="flex items-center gap-1.5 bg-surface-container-low hover:bg-surface-container active:scale-95 px-sm md:px-md py-xs rounded-full border border-outline-variant transition-all duration-150 group"
+              >
+                <span className="font-technical-mono text-xs md:text-sm text-error">
+                  {pair.from}
+                </span>
+                <span className="text-outline group-hover:text-on-surface group-hover:translate-x-0.5 transition-all duration-150">
+                  →
+                </span>
+                <span className="font-technical-mono text-xs md:text-sm text-primary">
+                  {pair.to}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* PDF Tools banner — real feature, qpdf-backed */}
+        <div className="w-full max-w-4xl bg-secondary-container rounded-xl p-md md:p-lg flex flex-col md:flex-row items-center justify-between gap-sm border border-secondary-fixed-dim">
+          <div className="flex items-center gap-sm text-center md:text-left flex-col md:flex-row">
+            <div>
+              <h3 className="font-headline-md text-lg md:text-2xl text-on-secondary-container font-semibold">
+                Need more PDF power?
+              </h3>
+              <p className="font-body-md text-sm md:text-base text-on-secondary-container opacity-90">
+                Merge, split, or compress PDF files quickly and easily.
+              </p>
+            </div>
+          </div>
           <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+            href="/pdf-tools"
+            className="bg-surface-container-lowest text-primary px-md md:px-lg py-xs md:py-sm rounded-lg font-label-sm font-medium hover:bg-surface-container-low transition-colors whitespace-nowrap shadow-sm border border-outline-variant w-full md:w-auto text-center"
           >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
+            Go to PDF Tools
           </a>
         </div>
       </main>
-    </div>
+      <Footer />
+    </>
   );
 }
