@@ -10,6 +10,7 @@ const {
 } = require("./conversions/registry");
 const { convertWithPandoc } = require("./conversions/pandocHandler");
 const { toPandocFormat } = require("./conversions/pandocFormats");
+const { convertAsciidoc } = require("./conversions/asciidocHandler");
 const { convertWithLibreOffice } = require("./conversions/libreofficeHandler");
 const { convertData } = require("./conversions/dataHandler");
 const { convertBibtexToJson } = require("./conversions/bibtexHandler");
@@ -175,6 +176,7 @@ async function main() {
       "nbconvert",
       "latex",
       "pdfConvert",
+      "asciidoc",
     ]);
     if (!SUPPORTED_ENGINES.has(engine)) {
       return reply
@@ -216,7 +218,9 @@ async function main() {
     const isBatch = idList.length > 1;
 
     async function convertOne(inputPath, outputPath) {
-      if (engine === "pandoc") {
+      if (engine === "asciidoc") {
+        await convertAsciidoc(inputPath, outputPath);
+      } else if (engine === "pandoc") {
         const fromFormat = toPandocFormat(sourceExt);
         const toFormat = toPandocFormat(targetExt);
         const extraArgs = fromFormat === "bibtex" ? ["--citeproc"] : [];

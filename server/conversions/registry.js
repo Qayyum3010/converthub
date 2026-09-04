@@ -49,7 +49,7 @@ const CONVERSIONS = [
   {
     from: "adoc",
     to: "html",
-    engine: "pandoc",
+    engine: "asciidoc",
     tier: "fast",
     implemented: true,
   },

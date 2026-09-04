@@ -25,7 +25,10 @@ async function convertData(inputPath, outputPath, fromExt, toExt) {
   try {
     const raw = await fs.readFile(inputPath, "utf8");
     const data = await parseInput(raw, from);
-    const output = await serializeOutput(data, to);
+    // `from` is threaded through so serializeOutput's csv case can
+    // specifically unwrap XML's root-tag wrapper (see fix note below) —
+    // every other target format keeps that wrapper as-is, unchanged.
+    const output = await serializeOutput(data, to, from);
     await fs.writeFile(outputPath, output, "utf8");
   } catch (err) {
     throw new Error(
@@ -59,17 +62,44 @@ async function parseInput(raw, from) {
   }
 }
 
-async function serializeOutput(data, to) {
+async function serializeOutput(data, to, from) {
   switch (to) {
-    case "csv":
-      return Papa.unparse(Array.isArray(data) ? data : [data]);
+    case "csv": {
+      // XML always parses into { <rootTag>: <content> } (see parseInput's
+      // xml case) — correct/by-design for json/yaml/toml targets (see
+      // DECISIONS.md, 2026-09-02), but CSV has no concept of a nested
+      // wrapper object: Papa.unparse would stringify it to a single
+      // "[object Object]" cell instead of real rows. Unwrap the root tag
+      // ONLY for this csv path, before deciding row shape.
+      let csvData = data;
+      if (
+        from === "xml" &&
+        csvData &&
+        typeof csvData === "object" &&
+        !Array.isArray(csvData) &&
+        Object.keys(csvData).length === 1
+      ) {
+        csvData = Object.values(csvData)[0];
+      }
+      return Papa.unparse(Array.isArray(csvData) ? csvData : [csvData]);
+    }
     case "json":
       return JSON.stringify(data, null, 2);
     case "yaml":
     case "yml":
       return yaml.dump(data);
-    case "toml":
-      return TOML.stringify(data);
+    case "toml": {
+      // TOML has no bare top-level array syntax the way JSON/YAML do — a
+      // plain array (which is exactly what CSV always parses into: one
+      // object per row) can't be represented directly. Wrap it under a
+      // `rows` key so @iarna/toml's stringifier renders it as proper
+      // TOML array-of-tables ([[rows]] blocks), which is TOML's actual
+      // mechanism for "a list of records." Non-array data (e.g. from
+      // json/yaml single-object sources) is passed through unchanged.
+      // See DECISIONS.md, 2026-09-04.
+      const tomlData = Array.isArray(data) ? { rows: data } : data;
+      return TOML.stringify(tomlData);
+    }
     case "xml": {
       const builder = new XmlBuilder();
       const wrapped = Array.isArray(data)

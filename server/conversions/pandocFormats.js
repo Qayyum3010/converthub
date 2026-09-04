@@ -6,7 +6,10 @@ const EXT_TO_PANDOC_FORMAT = {
   md: "markdown",
   html: "html",
   htm: "html",
-  adoc: "asciidoc",
+  // adoc intentionally NOT mapped here — Pandoc has no AsciiDoc reader
+  // (confirmed via `pandoc --list-input-formats`, pandoc 2.17.1.1).
+  // adoc->html routes through asciidocHandler.js (real asciidoctor CLI)
+  // instead. See DECISIONS.md, 2026-09-04.
   rst: "rst",
   rtf: "rtf",
   odt: "odt",
