@@ -72,6 +72,9 @@ const ALLOWED_EXTENSIONS = new Set([
   ".gz",
   ".bz2",
   ".xz",
+  ".txt",
+  ".tar.gz",
+  ".rar",
 ]);
 
 async function main() {
@@ -114,7 +117,16 @@ async function main() {
       return reply.code(400).send({ error: "No file provided" });
     }
 
-    const ext = path.extname(data.filename).toLowerCase();
+    // path.extname() only returns the last dot-segment, which breaks compound
+    // extensions like ".tar.gz" (returns ".gz", losing the "tar." part) — same
+    // problem registry.js's normalizeExt() already had to solve for lookups.
+    // Check known compound extensions first, then fall back to the simple case.
+    const COMPOUND_EXTENSIONS = [".tar.gz"];
+    const lowerFilename = data.filename.toLowerCase();
+    const matchedCompound = COMPOUND_EXTENSIONS.find((c) =>
+      lowerFilename.endsWith(c),
+    );
+    const ext = matchedCompound || path.extname(data.filename).toLowerCase();
 
     if (!ALLOWED_EXTENSIONS.has(ext)) {
       data.file.resume();
