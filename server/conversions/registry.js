@@ -11,13 +11,7 @@
 
 const CONVERSIONS = [
   // ---- Pandoc-based (lightweight markup / text formats) ----
-  {
-    from: "md",
-    to: "html",
-    engine: "pandoc",
-    tier: "fast",
-    implemented: true,
-  },
+  { from: "md", to: "html", engine: "pandoc", tier: "fast", implemented: true },
   {
     from: "md",
     to: "pdf",
@@ -32,13 +26,7 @@ const CONVERSIONS = [
     tier: "medium",
     implemented: true,
   },
-  {
-    from: "html",
-    to: "md",
-    engine: "pandoc",
-    tier: "fast",
-    implemented: true,
-  },
+  { from: "html", to: "md", engine: "pandoc", tier: "fast", implemented: true },
   {
     from: "html",
     to: "pdf",
@@ -115,27 +103,9 @@ const CONVERSIONS = [
   // ---- Spreadsheet/data formats ----
   { from: "csv", to: "json", engine: "data", tier: "fast", implemented: true },
   { from: "json", to: "csv", engine: "data", tier: "fast", implemented: true },
-  {
-    from: "json",
-    to: "yaml",
-    engine: "data",
-    tier: "fast",
-    implemented: true,
-  },
-  {
-    from: "yaml",
-    to: "json",
-    engine: "data",
-    tier: "fast",
-    implemented: true,
-  },
-  {
-    from: "json",
-    to: "toml",
-    engine: "data",
-    tier: "fast",
-    implemented: true,
-  },
+  { from: "json", to: "yaml", engine: "data", tier: "fast", implemented: true },
+  { from: "yaml", to: "json", engine: "data", tier: "fast", implemented: true },
+  { from: "json", to: "toml", engine: "data", tier: "fast", implemented: true },
   { from: "xml", to: "json", engine: "data", tier: "fast", implemented: true },
   { from: "csv", to: "xml", engine: "data", tier: "fast", implemented: true },
   { from: "xml", to: "csv", engine: "data", tier: "fast", implemented: true },
@@ -153,15 +123,8 @@ const CONVERSIONS = [
   { from: "csv", to: "toml", engine: "data", tier: "fast", implemented: true },
 
   // ---- LaTeX / TeX Live ----
-  // ---- LaTeX / TeX Live ----
   { from: "tex", to: "pdf", engine: "latex", tier: "slow", implemented: true },
-  {
-    from: "tex",
-    to: "html",
-    engine: "latex",
-    tier: "slow",
-    implemented: true,
-  },
+  { from: "tex", to: "html", engine: "latex", tier: "slow", implemented: true },
   {
     from: "tex",
     to: "docx",
@@ -244,24 +207,56 @@ const CONVERSIONS = [
     implemented: true,
   },
 
-  // ---- Archives ----
+  // ---- Plain text (Task: txt + archive expansion, 2026-09-04) ----
+  // docx/html -> txt route through LibreOffice (--convert-to txt), which
+  // handles real document structure more reliably than Pandoc's plain-text
+  // writer. txt -> * routes through Pandoc, reading the .txt as plain
+  // markdown source — safe because txt carries no formatting to lose or
+  // misinterpret. pdf -> txt already existed above under pdfConvert.
+  {
+    from: "docx",
+    to: "txt",
+    engine: "libreoffice",
+    tier: "medium",
+    implemented: true,
+  },
+  {
+    from: "html",
+    to: "txt",
+    engine: "libreoffice",
+    tier: "fast",
+    implemented: true,
+  },
+  {
+    from: "txt",
+    to: "docx",
+    engine: "pandoc",
+    tier: "fast",
+    implemented: true,
+  },
+  {
+    from: "txt",
+    to: "pdf",
+    engine: "pandoc",
+    tier: "medium",
+    implemented: true,
+  },
+  {
+    from: "txt",
+    to: "html",
+    engine: "pandoc",
+    tier: "fast",
+    implemented: true,
+  },
+  { from: "txt", to: "md", engine: "pandoc", tier: "fast", implemented: true },
+
+  // ---- Archives (rewritten 2026-09-04: zip/7z/tar/tar.gz core, rar
+  // extract-only. gz/bz2/xz dropped as standalone targets/sources — see
+  // DECISIONS.md, 2026-09-04, for the tar.gz-as-compound-format rationale
+  // and why rar can't be a conversion target (proprietary compressor). ----
   {
     from: "zip",
     to: "7z",
-    engine: "archive",
-    tier: "medium",
-    implemented: true,
-  },
-  {
-    from: "7z",
-    to: "zip",
-    engine: "archive",
-    tier: "medium",
-    implemented: true,
-  },
-  {
-    from: "tar",
-    to: "zip",
     engine: "archive",
     tier: "medium",
     implemented: true,
@@ -275,157 +270,126 @@ const CONVERSIONS = [
   },
   {
     from: "zip",
-    to: "gz",
-    engine: "archive",
-    tier: "medium",
-    implemented: true,
-  },
-  {
-    from: "zip",
-    to: "bz2",
-    engine: "archive",
-    tier: "medium",
-    implemented: true,
-  },
-  {
-    from: "zip",
-    to: "xz",
+    to: "tar.gz",
     engine: "archive",
     tier: "medium",
     implemented: true,
   },
   {
     from: "7z",
-    to: "tar",
-    engine: "archive",
-    tier: "medium",
-    implemented: true,
-  },
-  {
-    from: "7z",
-    to: "gz",
-    engine: "archive",
-    tier: "medium",
-    implemented: true,
-  },
-  {
-    from: "7z",
-    to: "bz2",
-    engine: "archive",
-    tier: "medium",
-    implemented: true,
-  },
-  {
-    from: "7z",
-    to: "xz",
-    engine: "archive",
-    tier: "medium",
-    implemented: true,
-  },
-  {
-    from: "tar",
-    to: "7z",
-    engine: "archive",
-    tier: "medium",
-    implemented: true,
-  },
-  {
-    from: "tar",
-    to: "gz",
-    engine: "archive",
-    tier: "medium",
-    implemented: true,
-  },
-  {
-    from: "tar",
-    to: "bz2",
-    engine: "archive",
-    tier: "medium",
-    implemented: true,
-  },
-  {
-    from: "tar",
-    to: "xz",
-    engine: "archive",
-    tier: "medium",
-    implemented: true,
-  },
-  {
-    from: "gz",
     to: "zip",
     engine: "archive",
     tier: "medium",
     implemented: true,
   },
   {
-    from: "gz",
-    to: "7z",
-    engine: "archive",
-    tier: "medium",
-    implemented: true,
-  },
-  {
-    from: "gz",
+    from: "7z",
     to: "tar",
     engine: "archive",
     tier: "medium",
     implemented: true,
   },
   {
-    from: "bz2",
+    from: "7z",
+    to: "tar.gz",
+    engine: "archive",
+    tier: "medium",
+    implemented: true,
+  },
+  {
+    from: "tar",
     to: "zip",
     engine: "archive",
     tier: "medium",
     implemented: true,
   },
   {
-    from: "bz2",
+    from: "tar",
     to: "7z",
     engine: "archive",
     tier: "medium",
     implemented: true,
   },
   {
-    from: "bz2",
-    to: "tar",
+    from: "tar",
+    to: "tar.gz",
     engine: "archive",
     tier: "medium",
     implemented: true,
   },
   {
-    from: "xz",
+    from: "tar.gz",
     to: "zip",
     engine: "archive",
     tier: "medium",
     implemented: true,
   },
   {
-    from: "xz",
+    from: "tar.gz",
     to: "7z",
     engine: "archive",
     tier: "medium",
     implemented: true,
   },
   {
-    from: "xz",
+    from: "tar.gz",
     to: "tar",
+    engine: "archive",
+    tier: "medium",
+    implemented: true,
+  },
+  // rar as source only — extraction via 7z, no free/open way to create rar
+  {
+    from: "rar",
+    to: "zip",
+    engine: "archive",
+    tier: "medium",
+    implemented: true,
+  },
+  {
+    from: "rar",
+    to: "7z",
+    engine: "archive",
+    tier: "medium",
+    implemented: true,
+  },
+  {
+    from: "rar",
+    to: "tar",
+    engine: "archive",
+    tier: "medium",
+    implemented: true,
+  },
+  {
+    from: "rar",
+    to: "tar.gz",
     engine: "archive",
     tier: "medium",
     implemented: true,
   },
 ];
 
+// tar.gz is a compound extension (two dots) — findConversion/validatePair
+// need to normalize ".tar.gz" the same way they normalize a plain
+// single-part extension, since path.extname() and simple `.replace(/^\./, "")`
+// callers upstream may hand us "tar.gz" without a leading dot already.
+// This mirrors how the rest of registry.js already expects a bare,
+// no-leading-dot, lowercased extension string.
+function normalizeExt(ext) {
+  return ext.replace(/^\./, "").toLowerCase();
+}
+
 function findConversion(from, to) {
-  const normalizedFrom = from.replace(/^\./, "").toLowerCase();
-  const normalizedTo = to.replace(/^\./, "").toLowerCase();
+  const normalizedFrom = normalizeExt(from);
+  const normalizedTo = normalizeExt(to);
   return CONVERSIONS.find(
     (c) => c.from === normalizedFrom && c.to === normalizedTo,
   );
 }
 
 function validatePair(from, to) {
-  const normalizedFrom = from.replace(/^\./, "").toLowerCase();
-  const normalizedTo = to.replace(/^\./, "").toLowerCase();
+  const normalizedFrom = normalizeExt(from);
+  const normalizedTo = normalizeExt(to);
   const match = findConversion(normalizedFrom, normalizedTo);
 
   if (!match) {

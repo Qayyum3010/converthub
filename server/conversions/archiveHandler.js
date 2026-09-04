@@ -1,24 +1,26 @@
 // archiveHandler.js
-// Wraps 7z for archive-format conversion. 7z has no single "convert" command
-// (unlike Pandoc/LibreOffice's --convert-to) — every conversion is genuinely
-// a two-step extract-then-repack: `7z x` into a scratch dir, then `7z a` the
-// extracted contents into a new archive of the target format. 7z infers
-// output format from the target filename's extension, so no extra format
-// flag is needed on the `a` step.
+// Wraps 7z, unrar, and native tar for archive-format conversion via an
+// extract-then-repack pattern (7z/tar have no single "convert" command).
 //
-// tar is a special case: 7z can read tar natively via `x`, but for *creating*
-// a tar output we shell out to the system `tar` binary instead, since 7z's
-// own tar-writing support is inconsistent across format pairs — using the
-// native tool for tar output avoids relying on 7z behavior we haven't
-// separately verified for that direction.
+// Supported sources: zip, 7z, tar, tar.gz, rar
+// Supported targets: zip, 7z, tar, tar.gz   (rar is source-only — there is
+//   no free/legal RAR encoder, so we never write .rar files, only read them)
+//
+// rar extraction uses the standalone `unrar` binary, NOT `7z x` — p7zip's 7z
+// has no built-in RAR support (that requires the proprietary, unpackaged
+// p7zip-rar plugin); `unrar` is a separate tool with its own CLI syntax.
+//
+// tar.gz is handled natively via `tar -xzf` / `tar -czf` in a single step —
+// no need to unwrap gzip and tar separately, since GNU tar handles both
+// layers of a .tar.gz in one command for both directions.
 
 const { execFile } = require("child_process");
-const { promisify } = require("util");
 const fs = require("fs");
 const fsp = require("fs/promises");
 const path = require("path");
 const os = require("os");
 const crypto = require("crypto");
+const { promisify } = require("util");
 const execFileAsync = promisify(execFile);
 
 /**
@@ -26,7 +28,7 @@ const execFileAsync = promisify(execFile);
  *
  * @param {string} inputPath - absolute path to the source archive
  * @param {string} outputPath - absolute path where the converted archive should be written
- * @param {string} targetFormat - target archive extension, no dot (e.g. "7z", "zip", "tar")
+ * @param {string} targetFormat - target archive extension, no dot (e.g. "7z", "zip", "tar", "tar.gz")
  * @returns {Promise<void>}
  */
 async function convertArchive(inputPath, outputPath, targetFormat) {
@@ -39,37 +41,34 @@ async function convertArchive(inputPath, outputPath, targetFormat) {
   fs.mkdirSync(extractDir, { recursive: true });
 
   try {
-    // Step 1: extract source archive with full paths preserved
-    await execFileAsync("7z", ["x", inputPath, `-o${extractDir}`, "-y"]);
-    let extractedEntries = await fsp.readdir(extractDir);
+    // Detect source format the same way registry.js's normalizeExt() does —
+    // check the compound ".tar.gz" case before falling back to the simple
+    // single-segment extension.
+    const lowerInput = inputPath.toLowerCase();
+    const sourceFormat = lowerInput.endsWith(".tar.gz")
+      ? "tar.gz"
+      : path.extname(inputPath).slice(1).toLowerCase();
+
+    // --- Step 1: extract ---
+    if (sourceFormat === "rar") {
+      // unrar's "x" extracts with full paths preserved (like "7z x"); the
+      // trailing slash on extractDir is required by unrar's own syntax to
+      // be recognized as a destination directory rather than a file.
+      await execFileAsync("unrar", ["x", "-y", inputPath, `${extractDir}/`]);
+    } else if (sourceFormat === "tar.gz") {
+      await execFileAsync("tar", ["-xzf", inputPath, "-C", extractDir]);
+    } else {
+      // zip, 7z, tar
+      await execFileAsync("7z", ["x", inputPath, `-o${extractDir}`, "-y"]);
+    }
+
+    const extractedEntries = await fsp.readdir(extractDir);
     if (extractedEntries.length === 0) {
       throw new Error("Archive extracted but contained no files.");
     }
 
-    // Single-stream sources (gz/bz2/xz) that were compressed via our own
-    // "tar first" fix unwrap to a single .tar file, not the real payload —
-    // extract that inner tar too so we reach the actual files, not a tar
-    // treated as if it were content. Loop (not just one extra pass) in case
-    // of doubly-wrapped inputs from elsewhere.
-    while (
-      extractedEntries.length === 1 &&
-      extractedEntries[0].toLowerCase().endsWith(".tar")
-    ) {
-      const innerTarPath = path.join(extractDir, extractedEntries[0]);
-      await execFileAsync("7z", ["x", innerTarPath, `-o${extractDir}`, "-y"]);
-      await fsp.unlink(innerTarPath);
-      extractedEntries = await fsp.readdir(extractDir);
-    }
-
-    // Single-stream compressors (gz/bz2/xz) can only compress ONE input —
-    // 7z hard-errors (E_INVALIDARG) if given multiple files. Standard
-    // practice is to tar the contents first, then compress the tar stream
-    // (the .tar.gz pattern), so we do that unconditionally for these
-    // formats rather than special-casing single- vs multi-file inputs.
-    const SINGLE_STREAM_FORMATS = new Set(["gz", "bz2", "xz"]);
-
+    // --- Step 2: repack ---
     if (targetFormat === "tar") {
-      // Use native tar for tar output (see file header note above)
       await execFileAsync("tar", [
         "-cf",
         outputPath,
@@ -77,25 +76,21 @@ async function convertArchive(inputPath, outputPath, targetFormat) {
         extractDir,
         ...extractedEntries,
       ]);
-    } else if (SINGLE_STREAM_FORMATS.has(targetFormat)) {
-      const tarScratchPath = path.join(scratchDir, "bundle.tar");
+    } else if (targetFormat === "tar.gz") {
       await execFileAsync("tar", [
-        "-cf",
-        tarScratchPath,
+        "-czf",
+        outputPath,
         "-C",
         extractDir,
         ...extractedEntries,
       ]);
-      // 7z infers compressor from outputPath's extension
-      await execFileAsync("7z", ["a", outputPath, tarScratchPath, "-y"]);
     } else {
-      // 7z infers archive type from outputPath's extension (zip, 7z, etc.)
-      await execFileAsync("7z", [
-        "a",
-        outputPath,
-        ...extractedEntries.map((f) => path.join(extractDir, f)),
-        "-y",
-      ]);
+      // zip, 7z — 7z infers archive type from outputPath's extension. Run
+      // with cwd = extractDir and pass only relative filenames so 7z stores
+      // clean entry names instead of leaking the scratch-dir UUID path.
+      await execFileAsync("7z", ["a", outputPath, ...extractedEntries, "-y"], {
+        cwd: extractDir,
+      });
     }
 
     if (!fs.existsSync(outputPath)) {

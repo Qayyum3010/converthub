@@ -1,5 +1,10 @@
 FROM debian:bookworm-slim
 
+# Enable the non-free component — required for unrar (RAR is a proprietary
+# format; Debian excludes its extractor from main/contrib for licensing
+# reasons, so p7zip-full alone cannot read .rar files)
+RUN sed -i 's/Components: main/Components: main contrib non-free/' /etc/apt/sources.list.d/debian.sources
+
 # Prevents apt from prompting for input during automated builds
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -20,6 +25,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     tesseract-ocr \
     poppler-utils \
     p7zip-full \
+    unrar \
     qpdf \
     texlive-latex-base \
     texlive-latex-recommended \

@@ -17,6 +17,13 @@ const EXT_TO_PANDOC_FORMAT = {
   pdf: "pdf", // note: pandoc can only write pdf via a LaTeX engine, not read it
   bib: "bibtex",
   tex: "latex", // added for tex->docx (Pandoc's native LaTeX reader) — note tex->pdf/html still go through latexHandler.js's dedicated engine, not this map
+  txt: "markdown", // plain text has no markdown syntax to misinterpret, so
+                   // reading .txt as Pandoc's "markdown" format is safe and
+                   // is the standard workaround since Pandoc has no
+                   // dedicated plain-text reader. Added for the 4 new
+                   // txt->* pairs (Task 5.7, 2026-09-04) — previously
+                   // missing, which made all 4 throw at runtime despite
+                   // being marked implemented:true in registry.js.
 };
 
 function toPandocFormat(ext) {
