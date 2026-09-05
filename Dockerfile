@@ -30,8 +30,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     texlive-latex-base \
     texlive-latex-recommended \
     texlive-latex-extra \
+    texlive-plain-generic \
     texlive-fonts-recommended \
     lmodern \
+    libheif-examples \
+    ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
 # Python/Ruby language-package-manager installs (separate layer from apt
