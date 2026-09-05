@@ -68,14 +68,14 @@ const CONVERSIONS = [
     from: "docx",
     to: "pdf",
     engine: "libreoffice",
-    tier: "medium",
+    tier: "slow",
     implemented: true,
   },
   {
     from: "xlsx",
     to: "pdf",
     engine: "libreoffice",
-    tier: "medium",
+    tier: "slow",
     implemented: true,
   },
   {
@@ -89,14 +89,14 @@ const CONVERSIONS = [
     from: "pptx",
     to: "pdf",
     engine: "libreoffice",
-    tier: "medium",
+    tier: "slow",
     implemented: true,
   },
   {
     from: "pptx",
     to: "odp",
     engine: "libreoffice",
-    tier: "medium",
+    tier: "slow",
     implemented: true,
   },
 
@@ -217,7 +217,7 @@ const CONVERSIONS = [
     from: "docx",
     to: "txt",
     engine: "libreoffice",
-    tier: "medium",
+    tier: "slow",
     implemented: true,
   },
   {
@@ -367,6 +367,43 @@ const CONVERSIONS = [
     tier: "medium",
     implemented: true,
   },
+
+    // --- Task 5.8.1: Office document family (19 pairs) ---
+  { from: "doc", to: "pdf", engine: "libreoffice", tier: "slow", implemented: true },
+  { from: "doc", to: "docx", engine: "libreoffice", tier: "slow", implemented: true },
+  { from: "doc", to: "odt", engine: "libreoffice", tier: "slow", implemented: true },
+  { from: "doc", to: "html", engine: "libreoffice", tier: "slow", implemented: true },
+  { from: "doc", to: "txt", engine: "libreoffice", tier: "slow", implemented: true },
+  { from: "docx", to: "doc", engine: "libreoffice", tier: "slow", implemented: true },
+  { from: "docx", to: "odt", engine: "libreoffice", tier: "slow", implemented: true },
+  { from: "odt", to: "docx", engine: "libreoffice", tier: "slow", implemented: true },
+  { from: "odt", to: "doc", engine: "libreoffice", tier: "slow", implemented: true },
+  { from: "odt", to: "pdf", engine: "libreoffice", tier: "slow", implemented: true },
+  { from: "odt", to: "txt", engine: "libreoffice", tier: "slow", implemented: true },
+  { from: "rtf", to: "pdf", engine: "pandoc", tier: "medium", implemented: true },
+  { from: "rtf", to: "html", engine: "pandoc", tier: "medium", implemented: true },
+  { from: "rtf", to: "odt", engine: "libreoffice", tier: "slow", implemented: true },
+  { from: "docx", to: "rtf", engine: "pandoc", tier: "medium", implemented: true },
+  { from: "md", to: "rtf", engine: "pandoc", tier: "medium", implemented: true },
+  { from: "md", to: "odt", engine: "pandoc", tier: "medium", implemented: true },
+  { from: "html", to: "docx", engine: "pandoc", tier: "medium", implemented: true },
+    { from: "html", to: "odt", engine: "pandoc", tier: "medium", implemented: true },
+
+  // ---- Spreadsheet family (Task 5.8.2) ----
+  { from: "xls", to: "xlsx", engine: "libreoffice", tier: "slow", implemented: true },
+  { from: "xls", to: "csv", engine: "libreoffice", tier: "slow", implemented: true },
+  { from: "xls", to: "pdf", engine: "libreoffice", tier: "slow", implemented: true },
+  { from: "xls", to: "ods", engine: "libreoffice", tier: "slow", implemented: true },
+  { from: "xlsx", to: "ods", engine: "libreoffice", tier: "slow", implemented: true },
+  { from: "xlsx", to: "xls", engine: "libreoffice", tier: "slow", implemented: true },
+  { from: "csv", to: "xlsx", engine: "libreoffice", tier: "slow", implemented: true },
+  { from: "csv", to: "ods", engine: "libreoffice", tier: "slow", implemented: true },
+  { from: "json", to: "xlsx", engine: "data", tier: "slow", implemented: true },
+  { from: "ods", to: "xlsx", engine: "libreoffice", tier: "slow", implemented: true },
+  { from: "ods", to: "xls", engine: "libreoffice", tier: "slow", implemented: true },
+  { from: "ods", to: "csv", engine: "libreoffice", tier: "slow", implemented: true },
+  { from: "ods", to: "pdf", engine: "libreoffice", tier: "slow", implemented: true },
+
 ];
 
 // tar.gz is a compound extension (two dots) — findConversion/validatePair

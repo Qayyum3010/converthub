@@ -4,10 +4,16 @@
 // these stay on the "fast" timeout tier (see jobRunner.js).
 
 const fs = require("fs/promises");
+const fsSync = require("fs");
 const Papa = require("papaparse");
 const yaml = require("js-yaml");
 const TOML = require("@iarna/toml");
 const { Builder: XmlBuilder, parseStringPromise } = require("xml2js");
+
+const path = require("path");
+const os = require("os");
+const crypto = require("crypto");
+const { convertWithLibreOffice } = require("./libreofficeHandler");
 
 /**
  * Converts a file between structured data formats.
@@ -112,4 +118,32 @@ async function serializeOutput(data, to, from) {
   }
 }
 
-module.exports = { convertData };
+/**
+ * Converts JSON to XLSX by chaining two independently-proven paths:
+ * JSON -> CSV (this module's own convertData), then CSV -> XLSX via
+ * LibreOffice. JSON has no direct spreadsheet import path, so this
+ * mirrors the ipynb->docx chain pattern in nbconvertHandler.js — a
+ * scratch intermediate file, cleaned up in a finally block.
+ *
+ * @param {string} inputPath - absolute path to the source .json file
+ * @param {string} outputPath - absolute path where the .xlsx should end up
+ * @returns {Promise<void>}
+ */
+async function convertJsonToXlsx(inputPath, outputPath) {
+  const scratchDir = path.join(
+    os.tmpdir(),
+    "converthub-data-chain",
+    crypto.randomUUID(),
+  );
+  fsSync.mkdirSync(scratchDir, { recursive: true });
+  const scratchCsv = path.join(scratchDir, "intermediate.csv");
+
+  try {
+    await convertData(inputPath, scratchCsv, "json", "csv");
+    await convertWithLibreOffice(scratchCsv, outputPath, "xlsx");
+  } finally {
+    fsSync.rm(scratchDir, { recursive: true, force: true }, () => {});
+  }
+}
+
+module.exports = { convertData, convertJsonToXlsx };

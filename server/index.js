@@ -12,7 +12,7 @@ const { convertWithPandoc } = require("./conversions/pandocHandler");
 const { toPandocFormat } = require("./conversions/pandocFormats");
 const { convertAsciidoc } = require("./conversions/asciidocHandler");
 const { convertWithLibreOffice } = require("./conversions/libreofficeHandler");
-const { convertData } = require("./conversions/dataHandler");
+const { convertData, convertJsonToXlsx } = require("./conversions/dataHandler");
 const { convertBibtexToJson } = require("./conversions/bibtexHandler");
 const { convertArchive } = require("./conversions/archiveHandler");
 const { convertNotebook } = require("./conversions/nbconvertHandler");
@@ -54,6 +54,7 @@ const ALLOWED_EXTENSIONS = new Set([
   ".rst",
   ".xls",
   ".xlsx",
+  ".ods",
   ".csv",
   ".json",
   ".xml",
@@ -75,6 +76,27 @@ const ALLOWED_EXTENSIONS = new Set([
   ".txt",
   ".tar.gz",
   ".rar",
+  // Task 5.9 — image conversion suite
+  ".jpg",
+  ".jpeg",
+  ".png",
+  ".webp",
+  ".gif",
+  ".tiff",
+  ".avif",
+  ".svg",
+  ".heic",
+  // Task 5.10.6 — ISO as archive source
+  ".iso",
+  // Task 5.11 — EPUB via Pandoc
+  ".epub",
+  // Task 5.13 — audio conversion suite
+  ".mp3",
+  ".wav",
+  ".ogg",
+  ".flac",
+  ".m4a",
+  ".aac",
 ]);
 
 async function main() {
@@ -247,7 +269,18 @@ async function main() {
         const targetFormat = targetExt.replace(/^\./, "").toLowerCase();
         await convertWithLibreOffice(inputPath, outputPath, targetFormat);
       } else if (engine === "data") {
-        await convertData(inputPath, outputPath, sourceExt, targetExt);
+        // json -> xlsx is the one "data" engine pair that isn't a direct
+        // pure-JS conversion — LibreOffice can't import raw JSON, so this
+        // one pair chains json->csv (this module) then csv->xlsx
+        // (LibreOffice). See convertJsonToXlsx in dataHandler.js and the
+        // Task 5.8.2 note in DECISIONS.md.
+        const normalizedSource = sourceExt.replace(/^\./, "").toLowerCase();
+        const normalizedTarget = targetExt.replace(/^\./, "").toLowerCase();
+        if (normalizedSource === "json" && normalizedTarget === "xlsx") {
+          await convertJsonToXlsx(inputPath, outputPath);
+        } else {
+          await convertData(inputPath, outputPath, sourceExt, targetExt);
+        }
       } else if (engine === "bibtex") {
         await convertBibtexToJson(inputPath, outputPath);
       } else if (engine === "archive") {
