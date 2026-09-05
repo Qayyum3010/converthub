@@ -13,7 +13,10 @@ const { toPandocFormat } = require("./conversions/pandocFormats");
 const { convertAsciidoc } = require("./conversions/asciidocHandler");
 const { convertWithLibreOffice } = require("./conversions/libreofficeHandler");
 const { convertData, convertJsonToXlsx } = require("./conversions/dataHandler");
-const { convertBibtexToJson } = require("./conversions/bibtexHandler");
+const {
+  convertBibtexToJson,
+  convertBibtexToXml,
+} = require("./conversions/bibtexHandler");
 const { convertArchive } = require("./conversions/archiveHandler");
 const { convertNotebook } = require("./conversions/nbconvertHandler");
 const { convertLatex } = require("./conversions/latexHandler");
@@ -282,7 +285,12 @@ async function main() {
           await convertData(inputPath, outputPath, sourceExt, targetExt);
         }
       } else if (engine === "bibtex") {
-        await convertBibtexToJson(inputPath, outputPath);
+        const normalizedTarget = targetExt.replace(/^\./, "").toLowerCase();
+        if (normalizedTarget === "xml") {
+          await convertBibtexToXml(inputPath, outputPath);
+        } else {
+          await convertBibtexToJson(inputPath, outputPath);
+        }
       } else if (engine === "archive") {
         const targetFormat = targetExt.replace(/^\./, "").toLowerCase();
         await convertArchive(inputPath, outputPath, targetFormat);

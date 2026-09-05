@@ -6,6 +6,7 @@
 // pure JS — same "fast tier" pattern as dataHandler.js.
 
 const fs = require("fs/promises");
+const { Builder: XmlBuilder } = require("xml2js");
 
 // Matches: @type{key, ...fields... }
 // Entries can span multiple lines; fields are comma-separated
@@ -63,4 +64,26 @@ async function convertBibtexToJson(inputPath, outputPath) {
   }
 }
 
-module.exports = { parseBibtex, convertBibtexToJson };
+/**
+ * Converts a .bib file to a clean XML file, reusing the same BibTeX
+ * parser as convertBibtexToJson. Wraps entries the same way
+ * dataHandler.js's XML target does ({ root: { item: [...] } }) for
+ * consistency across the app's XML output.
+ *
+ * @param {string} inputPath - absolute path to the source .bib file
+ * @param {string} outputPath - absolute path where the XML should be written
+ * @returns {Promise<void>}
+ */
+async function convertBibtexToXml(inputPath, outputPath) {
+  try {
+    const raw = await fs.readFile(inputPath, "utf8");
+    const entries = parseBibtex(raw);
+    const builder = new XmlBuilder();
+    const xml = builder.buildObject({ root: { item: entries } });
+    await fs.writeFile(outputPath, xml, "utf8");
+  } catch (err) {
+    throw new Error(`BibTeX-to-XML conversion failed: ${err.message}`);
+  }
+}
+
+module.exports = { parseBibtex, convertBibtexToJson, convertBibtexToXml };

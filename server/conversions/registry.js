@@ -402,8 +402,20 @@ const CONVERSIONS = [
   { from: "ods", to: "xlsx", engine: "libreoffice", tier: "slow", implemented: true },
   { from: "ods", to: "xls", engine: "libreoffice", tier: "slow", implemented: true },
   { from: "ods", to: "csv", engine: "libreoffice", tier: "slow", implemented: true },
-  { from: "ods", to: "pdf", engine: "libreoffice", tier: "slow", implemented: true },
+    { from: "ods", to: "pdf", engine: "libreoffice", tier: "slow", implemented: true },
 
+  // ---- Presentation family + BibTeX (Task 5.8.3) ----
+  { from: "ppt", to: "pptx", engine: "libreoffice", tier: "slow", implemented: true },
+  { from: "ppt", to: "odp", engine: "libreoffice", tier: "slow", implemented: true },
+  { from: "ppt", to: "pdf", engine: "libreoffice", tier: "slow", implemented: true },
+  { from: "pptx", to: "ppt", engine: "libreoffice", tier: "slow", implemented: true },
+  { from: "odp", to: "pptx", engine: "libreoffice", tier: "slow", implemented: true },
+  { from: "odp", to: "ppt", engine: "libreoffice", tier: "slow", implemented: true },
+  { from: "odp", to: "pdf", engine: "libreoffice", tier: "slow", implemented: true },
+  { from: "md", to: "pptx", engine: "pandoc", tier: "medium", implemented: true },
+  { from: "svg", to: "pdf", engine: "libreoffice", tier: "slow", implemented: true },
+  { from: "bib", to: "xml", engine: "bibtex", tier: "fast", implemented: true },
+  
 ];
 
 // tar.gz is a compound extension (two dots) — findConversion/validatePair
