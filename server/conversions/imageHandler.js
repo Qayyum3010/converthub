@@ -24,6 +24,51 @@ const EXT_TO_SHARP_FORMAT = {
   avif: "avif",
 };
 
+// Decompression-bomb / resource-exhaustion guard (Subtask 5.9.5).
+// Sharp's own default limitInputPixels (~268M px) does NOT reliably
+// protect us — confirmed via direct test (2026-09-06) that an oversized
+// raw allocation (30000x30000x3) crashes the Node process with SIGSEGV
+// (exit 139) rather than rejecting the promise cleanly. We therefore
+// read dimensions via a cheap header-only metadata() call BEFORE any
+// decode/resize/toFormat call, and reject with a normal catchable Error
+// if either dimension exceeds this cap.
+//
+// 10000px is comfortably above any legitimate use case for this app
+// (print-quality raster/vector work tops out well under this) while
+// staying far below the range where a single conversion can meaningfully
+// threaten process memory.
+const MAX_IMAGE_DIMENSION = 10000;
+
+/**
+ * Reads image header metadata (cheap, no pixel decode) and throws a clean
+ * Error if the declared dimensions exceed MAX_IMAGE_DIMENSION. Must be
+ * called before any sharp() pipeline that actually decodes/resizes pixels.
+ *
+ * @param {string} inputPath - absolute path to the source image
+ * @param {string} label - short label for the error message (e.g. "Image", "SVG")
+ * @returns {Promise<void>}
+ */
+async function assertDimensionsWithinLimit(inputPath, label) {
+  let metadata;
+  try {
+    metadata = await sharp(inputPath).metadata();
+  } catch (err) {
+    // Malformed/unreadable file — let the caller's existing try/catch
+    // produce the normal "conversion failed" message downstream.
+    throw new Error(`${label} conversion failed: ${err.message}`);
+  }
+
+  const { width, height } = metadata;
+  if (
+    (width && width > MAX_IMAGE_DIMENSION) ||
+    (height && height > MAX_IMAGE_DIMENSION)
+  ) {
+    throw new Error(
+      `${label} conversion failed: image dimensions (${width}x${height}) exceed the maximum allowed (${MAX_IMAGE_DIMENSION}px per side)`
+    );
+  }
+}
+
 /**
  * Converts a raster image between JPG/PNG/WebP/GIF/TIFF/AVIF formats.
  *
@@ -39,6 +84,8 @@ async function convertImage(inputPath, outputPath, targetExt) {
   if (!sharpFormat) {
     throw new Error(`Unsupported image target format: ${targetExt}`);
   }
+
+  await assertDimensionsWithinLimit(inputPath, "Image");
 
   try {
     await sharp(inputPath).toFormat(sharpFormat).toFile(outputPath);
@@ -59,6 +106,12 @@ async function convertImage(inputPath, outputPath, targetExt) {
  * bump density to 300 (a standard print-quality DPI) so the rasterized
  * output is genuinely usable, not just technically non-blank.
  *
+ * NOTE: the dimension guard here checks the SVG's *declared* width/height
+ * at default density — an SVG with a small declared size but requesting
+ * an extreme density could still balloon at render time. Sharp's density
+ * option here is fixed at 300 (not user-controlled), so this is bounded,
+ * but worth remembering if density ever becomes a user-facing option.
+ *
  * @param {string} inputPath - absolute path to the source .svg file
  * @param {string} outputPath - absolute path where the raster image should be written
  * @param {string} targetExt - target extension, no dot (e.g. "png")
@@ -71,6 +124,8 @@ async function convertSvgToRaster(inputPath, outputPath, targetExt) {
   if (!sharpFormat) {
     throw new Error(`Unsupported image target format: ${targetExt}`);
   }
+
+  await assertDimensionsWithinLimit(inputPath, "SVG");
 
   try {
     await sharp(inputPath, { density: 300 })
