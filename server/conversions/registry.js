@@ -48,6 +48,15 @@ const CONVERSIONS = [
     tier: "fast",
     implemented: true,
   },
+
+  // ---- Task 5.10.2: RST made bidirectional ----
+  { from: "rst", to: "pdf", engine: "pandoc", tier: "medium", implemented: true },
+  { from: "rst", to: "docx", engine: "pandoc", tier: "medium", implemented: true },
+  { from: "rst", to: "md", engine: "pandoc", tier: "medium", implemented: true },
+  { from: "rst", to: "txt", engine: "pandoc", tier: "fast", implemented: true },
+  { from: "md", to: "rst", engine: "pandoc", tier: "medium", implemented: true },
+  { from: "html", to: "rst", engine: "pandoc", tier: "medium", implemented: true },
+  { from: "txt", to: "rst", engine: "pandoc", tier: "fast", implemented: true },
   {
     from: "rtf",
     to: "docx",
