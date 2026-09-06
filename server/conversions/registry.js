@@ -250,6 +250,10 @@ const CONVERSIONS = [
   },
   { from: "txt", to: "md", engine: "pandoc", tier: "fast", implemented: true },
 
+  // ---- Task 5.10.1: critical gaps in docx/md family ----
+  { from: "docx", to: "md", engine: "pandoc", tier: "medium", implemented: true },
+  { from: "md", to: "txt", engine: "pandoc", tier: "fast", implemented: true },
+
   // ---- Archives (rewritten 2026-09-04: zip/7z/tar/tar.gz core, rar
   // extract-only. gz/bz2/xz dropped as standalone targets/sources — see
   // DECISIONS.md, 2026-09-04, for the tar.gz-as-compound-format rationale
@@ -470,6 +474,12 @@ const CONVERSIONS = [
   { from: "jpg", to: "svg", engine: "vectorize", tier: "slow", implemented: true },
   { from: "png", to: "svg", engine: "vectorize", tier: "slow", implemented: true },
   { from: "webp", to: "svg", engine: "vectorize", tier: "slow", implemented: true },
+
+  // ---- HEIC support (Task 5.9.4) ----
+  { from: "heic", to: "jpg", engine: "heic", tier: "fast", implemented: true },
+  { from: "heic", to: "png", engine: "heic", tier: "fast", implemented: true },
+  { from: "jpg", to: "heic", engine: "heic", tier: "fast", implemented: true },
+  { from: "png", to: "heic", engine: "heic", tier: "fast", implemented: true },
 ];
 
 // tar.gz is a compound extension (two dots) — findConversion/validatePair
