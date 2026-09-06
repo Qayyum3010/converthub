@@ -16,6 +16,7 @@ const { convertData, convertJsonToXlsx } = require("./conversions/dataHandler");
 const {
   convertBibtexToJson,
   convertBibtexToXml,
+  convertBibtexToCsv,
 } = require("./conversions/bibtexHandler");
 const { convertArchive } = require("./conversions/archiveHandler");
 const { convertNotebook } = require("./conversions/nbconvertHandler");
@@ -23,6 +24,7 @@ const { convertLatex } = require("./conversions/latexHandler");
 const { convertPdfSource } = require("./conversions/pdfConvertHandler");
 const { convertImage, convertSvgToRaster } = require("./conversions/imageHandler");
 const { convertRasterToSvg } = require("./conversions/vectorizeHandler");
+const { convertHeicToRaster, convertRasterToHeic } = require("./conversions/heicHandler");
 const {
   validatePdf,
   mergePdfs,
@@ -218,6 +220,7 @@ async function main() {
       "asciidoc",
       "image",
       "vectorize",
+      "heic",
     ]);
     if (!SUPPORTED_ENGINES.has(engine)) {
       return reply
@@ -292,6 +295,8 @@ async function main() {
         const normalizedTarget = targetExt.replace(/^\./, "").toLowerCase();
         if (normalizedTarget === "xml") {
           await convertBibtexToXml(inputPath, outputPath);
+        } else if (normalizedTarget === "csv") {
+          await convertBibtexToCsv(inputPath, outputPath);
         } else {
           await convertBibtexToJson(inputPath, outputPath);
         }
@@ -321,6 +326,13 @@ async function main() {
         }
       } else if (engine === "vectorize") {
         await convertRasterToSvg(inputPath, outputPath);
+      } else if (engine === "heic") {
+        const normalizedSource = sourceExt.replace(/^\./, "").toLowerCase();
+        if (normalizedSource === "heic") {
+          await convertHeicToRaster(inputPath, outputPath);
+        } else {
+          await convertRasterToHeic(inputPath, outputPath);
+        }
       }
     }
 

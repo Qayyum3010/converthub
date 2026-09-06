@@ -7,6 +7,7 @@
 
 const fs = require("fs/promises");
 const { Builder: XmlBuilder } = require("xml2js");
+const Papa = require("papaparse");
 
 // Matches: @type{key, ...fields... }
 // Entries can span multiple lines; fields are comma-separated
@@ -86,4 +87,54 @@ async function convertBibtexToXml(inputPath, outputPath) {
   }
 }
 
-module.exports = { parseBibtex, convertBibtexToJson, convertBibtexToXml };
+/**
+ * Converts a .bib file to a CSV file, reusing the same BibTeX parser as
+ * convertBibtexToJson/convertBibtexToXml (Task 5.10.7).
+ *
+ * BibTeX entries have variable fields by design (an @article typically
+ * has journal/volume, while an @book has publisher/isbn, etc.) — a naive
+ * CSV write would either crash on mismatched columns or silently drop
+ * fields. Papa.unparse() (already a project dependency, used the same
+ * way in dataHandler.js) handles this correctly out of the box: given
+ * an array of objects, it automatically computes the union of all keys
+ * across every entry as the header row, and fills in an empty cell for
+ * any entry missing a given field — exactly the behavior needed here,
+ * with no extra logic required.
+ *
+ * @param {string} inputPath - absolute path to the source .bib file
+ * @param {string} outputPath - absolute path where the CSV should be written
+ * @returns {Promise<void>}
+ */
+async function convertBibtexToCsv(inputPath, outputPath) {
+  try {
+    const raw = await fs.readFile(inputPath, "utf8");
+    const entries = parseBibtex(raw);
+
+    // Papa.unparse() only infers headers from the FIRST object's keys when
+    // given a plain array of objects — it does NOT compute the true union
+    // of keys across every row. BibTeX entries have variable fields by
+    // design (an @article has `journal`, a @book has `publisher` instead),
+    // so relying on the first entry silently drops any field that first
+    // entry doesn't happen to have. Compute the real union ourselves and
+    // pass it explicitly via the {fields, data} form.
+    const fieldSet = new Set();
+    for (const entry of entries) {
+      for (const key of Object.keys(entry)) {
+        fieldSet.add(key);
+      }
+    }
+    const fields = Array.from(fieldSet);
+
+    const csv = Papa.unparse({ fields, data: entries });
+    await fs.writeFile(outputPath, csv, "utf8");
+  } catch (err) {
+    throw new Error(`BibTeX-to-CSV conversion failed: ${err.message}`);
+  }
+}
+
+module.exports = {
+  parseBibtex,
+  convertBibtexToJson,
+  convertBibtexToXml,
+  convertBibtexToCsv,
+};

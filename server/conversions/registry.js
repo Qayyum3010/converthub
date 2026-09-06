@@ -455,6 +455,8 @@ const CONVERSIONS = [
   { from: "svg", to: "pdf", engine: "libreoffice", tier: "slow", implemented: true },
   { from: "bib", to: "xml", engine: "bibtex", tier: "fast", implemented: true },
 
+  // ---- Task 5.10.7: BibTeX CSV output ----
+  { from: "bib", to: "csv", engine: "bibtex", tier: "fast", implemented: true },
   // ---- Raster image cross-matrix (Task 5.9.2) ----
   // Tier TBD — every pair below is provisionally "fast" (sharp/libvips is
   // typically sub-second per the task's own scope note), but this must be
