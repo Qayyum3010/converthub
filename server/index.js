@@ -21,7 +21,8 @@ const { convertArchive } = require("./conversions/archiveHandler");
 const { convertNotebook } = require("./conversions/nbconvertHandler");
 const { convertLatex } = require("./conversions/latexHandler");
 const { convertPdfSource } = require("./conversions/pdfConvertHandler");
-const { convertImage } = require("./conversions/imageHandler");
+const { convertImage, convertSvgToRaster } = require("./conversions/imageHandler");
+const { convertRasterToSvg } = require("./conversions/vectorizeHandler");
 const {
   validatePdf,
   mergePdfs,
@@ -216,6 +217,7 @@ async function main() {
       "pdfConvert",
       "asciidoc",
       "image",
+      "vectorize",
     ]);
     if (!SUPPORTED_ENGINES.has(engine)) {
       return reply
@@ -311,7 +313,14 @@ async function main() {
         // spread below just contributes nothing for them.
         return await convertPdfSource(inputPath, outputPath, targetFormat);
       } else if (engine === "image") {
-        await convertImage(inputPath, outputPath, targetExt);
+        const normalizedSource = sourceExt.replace(/^\./, "").toLowerCase();
+        if (normalizedSource === "svg") {
+          await convertSvgToRaster(inputPath, outputPath, targetExt);
+        } else {
+          await convertImage(inputPath, outputPath, targetExt);
+        }
+      } else if (engine === "vectorize") {
+        await convertRasterToSvg(inputPath, outputPath);
       }
     }
 

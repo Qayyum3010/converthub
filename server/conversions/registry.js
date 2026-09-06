@@ -451,6 +451,25 @@ const CONVERSIONS = [
   { from: "avif", to: "webp", engine: "image", tier: "fast", implemented: true },
   { from: "avif", to: "gif", engine: "image", tier: "fast", implemented: true },
   { from: "avif", to: "tiff", engine: "image", tier: "fast", implemented: true },
+
+  // ---- SVG rasterization (Task 5.9.3) ----
+  // One-way: raster -> svg intentionally excluded (see DECISIONS.md).
+  // Coexists with the existing `svg -> pdf` (LibreOffice, Task 5.8.3)
+  // entry above — different engine, same source format, no conflict.
+  { from: "svg", to: "jpg", engine: "image", tier: "fast", implemented: true },
+  { from: "svg", to: "png", engine: "image", tier: "fast", implemented: true },
+  { from: "svg", to: "webp", engine: "image", tier: "fast", implemented: true },
+  { from: "svg", to: "gif", engine: "image", tier: "fast", implemented: true },
+  { from: "svg", to: "tiff", engine: "image", tier: "fast", implemented: true },
+  { from: "svg", to: "avif", engine: "image", tier: "fast", implemented: true },
+
+  // ---- Raster -> SVG vectorization (v2, gated behind real CPU test) ----
+  // Tier intentionally left unset/placeholder until the --cpus=0.1 Render
+  // free-tier timing test (see DECISIONS.md) is actually run — do NOT
+  // treat "medium" below as validated, it's a starting guess only.
+  { from: "jpg", to: "svg", engine: "vectorize", tier: "slow", implemented: true },
+  { from: "png", to: "svg", engine: "vectorize", tier: "slow", implemented: true },
+  { from: "webp", to: "svg", engine: "vectorize", tier: "slow", implemented: true },
 ];
 
 // tar.gz is a compound extension (two dots) — findConversion/validatePair
