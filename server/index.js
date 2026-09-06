@@ -519,7 +519,7 @@ async function main() {
     }
 
     const outputId = crypto.randomUUID();
-    const outputPath = path.join(tempDir, `${outputId}-merged.pdf`);
+const outputPath = path.join(tempDir, `${outputId}-out.pdf`);
 
     const jobId = createJob();
 
@@ -556,7 +556,7 @@ async function main() {
     }
 
     const outputId = crypto.randomUUID();
-    const outputPath = path.join(tempDir, `${outputId}-split.pdf`);
+    const outputPath = path.join(tempDir, `${outputId}-out.pdf`);
 
     const jobId = createJob();
 
@@ -607,10 +607,10 @@ async function main() {
 
     async function compressOne(f) {
       const outputId = crypto.randomUUID();
-      const outputPath = path.join(tempDir, `${outputId}-compressed.pdf`);
+      const outputPath = path.join(tempDir, `${outputId}-out.pdf`);
       await validatePdf(f.inputPath);
       await runJob(() => compressPdf(f.inputPath, outputPath), "medium");
-      return outputPath;
+      return { outputId, outputPath };
     }
 
     (async () => {
@@ -618,9 +618,9 @@ async function main() {
 
       if (!isBatch) {
         try {
-          const outputPath = await compressOne(jobFiles[0]);
+          const { outputId, outputPath } = await compressOne(jobFiles[0]);
           markDone(jobId, {
-            fileId: jobFiles[0].fileId,
+            fileId: outputId,
             outputPath,
             targetExt: "pdf",
           });
@@ -634,9 +634,9 @@ async function main() {
       const results = [];
       for (const f of jobFiles) {
         try {
-          const outputPath = await compressOne(f);
+          const { outputId, outputPath } = await compressOne(f);
           results.push({
-            fileId: f.fileId,
+            fileId: outputId,
             outputPath,
             targetExt: "pdf",
             status: "done",
