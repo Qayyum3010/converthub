@@ -18,6 +18,7 @@ const {
   convertBibtexToXml,
   convertBibtexToCsv,
 } = require("./conversions/bibtexHandler");
+const { convertAudio } = require("./conversions/audioHandler");
 const { convertArchive } = require("./conversions/archiveHandler");
 const { convertNotebook } = require("./conversions/nbconvertHandler");
 const { convertLatex } = require("./conversions/latexHandler");
@@ -221,6 +222,7 @@ async function main() {
       "image",
       "vectorize",
       "heic",
+      "audio",
     ]);
     if (!SUPPORTED_ENGINES.has(engine)) {
       return reply
@@ -300,6 +302,8 @@ async function main() {
         } else {
           await convertBibtexToJson(inputPath, outputPath);
         }
+      } else if (engine === "audio") {
+        await convertAudio(inputPath, outputPath, targetExt);
       } else if (engine === "archive") {
         const targetFormat = targetExt.replace(/^\./, "").toLowerCase();
         await convertArchive(inputPath, outputPath, targetFormat);

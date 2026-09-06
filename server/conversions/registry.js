@@ -458,6 +458,46 @@ const CONVERSIONS = [
   // ---- Task 5.10.7: BibTeX CSV output ----
   { from: "bib", to: "csv", engine: "bibtex", tier: "fast", implemented: true },
 
+  // ---- Task 5.13: FFmpeg audio, full cross-matrix (2026-09-06) ----
+  // Tier "fast" based on the mp3->wav validation test (5.04s source,
+  // ~8s wall time including job overhead) — confirm against a longer
+  // real-world fixture before treating "fast" as final for large files.
+  { from: "mp3", to: "wav", engine: "audio", tier: "fast", implemented: true },
+  { from: "mp3", to: "ogg", engine: "audio", tier: "fast", implemented: true },
+  { from: "mp3", to: "flac", engine: "audio", tier: "fast", implemented: true },
+  { from: "mp3", to: "m4a", engine: "audio", tier: "fast", implemented: true },
+  { from: "mp3", to: "aac", engine: "audio", tier: "fast", implemented: true },
+
+  { from: "wav", to: "mp3", engine: "audio", tier: "fast", implemented: true },
+  { from: "wav", to: "ogg", engine: "audio", tier: "fast", implemented: true },
+  { from: "wav", to: "flac", engine: "audio", tier: "fast", implemented: true },
+  { from: "wav", to: "m4a", engine: "audio", tier: "fast", implemented: true },
+  { from: "wav", to: "aac", engine: "audio", tier: "fast", implemented: true },
+
+  { from: "ogg", to: "mp3", engine: "audio", tier: "fast", implemented: true },
+  { from: "ogg", to: "wav", engine: "audio", tier: "fast", implemented: true },
+  { from: "ogg", to: "flac", engine: "audio", tier: "fast", implemented: true },
+  { from: "ogg", to: "m4a", engine: "audio", tier: "fast", implemented: true },
+  { from: "ogg", to: "aac", engine: "audio", tier: "fast", implemented: true },
+
+  { from: "flac", to: "mp3", engine: "audio", tier: "fast", implemented: true },
+  { from: "flac", to: "wav", engine: "audio", tier: "fast", implemented: true },
+  { from: "flac", to: "ogg", engine: "audio", tier: "fast", implemented: true },
+  { from: "flac", to: "m4a", engine: "audio", tier: "fast", implemented: true },
+  { from: "flac", to: "aac", engine: "audio", tier: "fast", implemented: true },
+
+  { from: "m4a", to: "mp3", engine: "audio", tier: "fast", implemented: true },
+  { from: "m4a", to: "wav", engine: "audio", tier: "fast", implemented: true },
+  { from: "m4a", to: "ogg", engine: "audio", tier: "fast", implemented: true },
+  { from: "m4a", to: "flac", engine: "audio", tier: "fast", implemented: true },
+  { from: "m4a", to: "aac", engine: "audio", tier: "fast", implemented: true },
+
+  { from: "aac", to: "mp3", engine: "audio", tier: "fast", implemented: true },
+  { from: "aac", to: "wav", engine: "audio", tier: "fast", implemented: true },
+  { from: "aac", to: "ogg", engine: "audio", tier: "fast", implemented: true },
+  { from: "aac", to: "flac", engine: "audio", tier: "fast", implemented: true },
+  { from: "aac", to: "m4a", engine: "audio", tier: "fast", implemented: true },
+
   // ---- Task 5.11: EPUB via Pandoc (zero new dependency) ----
   { from: "md", to: "epub", engine: "pandoc", tier: "medium", implemented: true },
   { from: "html", to: "epub", engine: "pandoc", tier: "medium", implemented: true },
