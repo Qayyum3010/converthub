@@ -392,6 +392,14 @@ const CONVERSIONS = [
     implemented: true,
   },
 
+  // ---- Task 5.10.6: ISO as extract-only archive source (same pattern
+  // as rar — p7zip reads .iso natively, no new dependency; ISO is never
+  // a target, same reasoning as the rar-as-target exclusion above) ----
+  { from: "iso", to: "zip", engine: "archive", tier: "medium", implemented: true },
+  { from: "iso", to: "7z", engine: "archive", tier: "medium", implemented: true },
+  { from: "iso", to: "tar", engine: "archive", tier: "medium", implemented: true },
+  { from: "iso", to: "tar.gz", engine: "archive", tier: "medium", implemented: true },
+
     // --- Task 5.8.1: Office document family (19 pairs) ---
   { from: "doc", to: "pdf", engine: "libreoffice", tier: "slow", implemented: true },
   { from: "doc", to: "docx", engine: "libreoffice", tier: "slow", implemented: true },

@@ -2,9 +2,19 @@
 // Wraps 7z, unrar, and native tar for archive-format conversion via an
 // extract-then-repack pattern (7z/tar have no single "convert" command).
 //
-// Supported sources: zip, 7z, tar, tar.gz, rar
-// Supported targets: zip, 7z, tar, tar.gz   (rar is source-only — there is
-//   no free/legal RAR encoder, so we never write .rar files, only read them)
+// Supported sources: zip, 7z, tar, tar.gz, rar, iso
+// Supported targets: zip, 7z, tar, tar.gz   (rar and iso are source-only —
+//   there is no free/legal RAR encoder, and ISO-as-a-target isn't a
+//   meaningful operation for this app's use case, so we never write
+//   .rar or .iso files, only read them)
+//
+// iso extraction (Task 5.10.6) requires NO new code path — confirmed via
+// `7z i` (list installed codecs) that p7zip has built-in ISO support
+// (`Iso` codec, .iso/.img extensions), so a .iso source file falls
+// through to the existing generic "zip, 7z, tar" extraction branch below
+// (`7z x`) automatically, since ISO doesn't match the special-cased
+// "rar" or "tar.gz" branches. Verified via real end-to-end test, not
+// assumed from the fallthrough logic alone.
 //
 // rar extraction uses the standalone `unrar` binary, NOT `7z x` — p7zip's 7z
 // has no built-in RAR support (that requires the proprietary, unpackaged

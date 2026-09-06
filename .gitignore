@@ -37,3 +37,7 @@ Thumbs.db
 /uploads/
 
 client/.env.local
+
+# Large binary test fixtures (not needed in version control — see
+# DECISIONS.md Task 5.10.6 for how to regenerate/redownload if needed)
+test-fixtures/sample.iso
