@@ -142,6 +142,13 @@ const CONVERSIONS = [
     implemented: true,
   },
 
+  // ---- Task 5.10.4: LaTeX further connected (pandoc, no compilation) ----
+  { from: "md", to: "tex", engine: "pandoc", tier: "medium", implemented: true },
+  { from: "rst", to: "tex", engine: "pandoc", tier: "medium", implemented: true },
+  { from: "html", to: "tex", engine: "pandoc", tier: "medium", implemented: true },
+  { from: "tex", to: "md", engine: "pandoc", tier: "medium", implemented: true },
+  { from: "tex", to: "txt", engine: "pandoc", tier: "fast", implemented: true },
+
   // ---- BibTeX ----
   {
     from: "bib",
