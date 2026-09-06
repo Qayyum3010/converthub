@@ -189,6 +189,10 @@ const CONVERSIONS = [
   },
   // NOTE: ipynb -> pdf intentionally excluded (deferred, see PROJECT_OVERVIEW.md)
 
+
+  // ---- Task 5.10.5: Jupyter missing direction (pandoc native ipynb writer) ----
+  { from: "md", to: "ipynb", engine: "pandoc", tier: "medium", implemented: true },
+
   // ---- PDF as source (Task 5.6) ----
   // Handled by pdfConvertHandler.js, not pdfHandler.js (which owns the
   // dedicated PDF Tools merge/split/compress/compare/analyze endpoints).

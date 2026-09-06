@@ -28,6 +28,14 @@ const EXT_TO_PANDOC_FORMAT = {
               // from memory. Write-only entries in registry.js (csv is
               // never a pandoc-engine *target*), same read/write
               // non-distinction as the pptx entry above.
+
+                ipynb: "ipynb", // Pandoc has a native ipynb (Jupyter notebook) writer —
+                  // confirmed via `pandoc --list-output-formats`, not
+                  // assumed from memory. Write-only for our purposes
+                  // (registry.js's only pandoc-engine ipynb entries are
+                  // as a *target* here — ipynb as a *source* routes
+                  // through nbconvertHandler.js instead, a different
+                  // engine), same non-distinction pattern as pptx/csv.
   txt: "markdown", // plain text has no markdown syntax to misinterpret, so
 
                    // reading .txt as Pandoc's "markdown" format is safe and
