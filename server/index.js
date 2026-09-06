@@ -21,6 +21,7 @@ const { convertArchive } = require("./conversions/archiveHandler");
 const { convertNotebook } = require("./conversions/nbconvertHandler");
 const { convertLatex } = require("./conversions/latexHandler");
 const { convertPdfSource } = require("./conversions/pdfConvertHandler");
+const { convertImage } = require("./conversions/imageHandler");
 const {
   validatePdf,
   mergePdfs,
@@ -214,6 +215,7 @@ async function main() {
       "latex",
       "pdfConvert",
       "asciidoc",
+      "image",
     ]);
     if (!SUPPORTED_ENGINES.has(engine)) {
       return reply
@@ -308,6 +310,8 @@ async function main() {
         // engines' convertOne branches return undefined, which is fine, the
         // spread below just contributes nothing for them.
         return await convertPdfSource(inputPath, outputPath, targetFormat);
+      } else if (engine === "image") {
+        await convertImage(inputPath, outputPath, targetExt);
       }
     }
 

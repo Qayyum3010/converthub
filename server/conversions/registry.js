@@ -415,7 +415,42 @@ const CONVERSIONS = [
   { from: "md", to: "pptx", engine: "pandoc", tier: "medium", implemented: true },
   { from: "svg", to: "pdf", engine: "libreoffice", tier: "slow", implemented: true },
   { from: "bib", to: "xml", engine: "bibtex", tier: "fast", implemented: true },
-  
+
+  // ---- Raster image cross-matrix (Task 5.9.2) ----
+  // Tier TBD — every pair below is provisionally "fast" (sharp/libvips is
+  // typically sub-second per the task's own scope note), but this must be
+  // confirmed against a real large-file timing test before treating it as
+  // final, same discipline as every other tier decision so far.
+  { from: "jpg", to: "png", engine: "image", tier: "fast", implemented: true },
+  { from: "jpg", to: "webp", engine: "image", tier: "fast", implemented: true },
+  { from: "jpg", to: "gif", engine: "image", tier: "fast", implemented: true },
+  { from: "jpg", to: "tiff", engine: "image", tier: "fast", implemented: true },
+  { from: "jpg", to: "avif", engine: "image", tier: "fast", implemented: true },
+  { from: "png", to: "jpg", engine: "image", tier: "fast", implemented: true },
+  { from: "png", to: "webp", engine: "image", tier: "fast", implemented: true },
+  { from: "png", to: "gif", engine: "image", tier: "fast", implemented: true },
+  { from: "png", to: "tiff", engine: "image", tier: "fast", implemented: true },
+  { from: "png", to: "avif", engine: "image", tier: "fast", implemented: true },
+  { from: "webp", to: "jpg", engine: "image", tier: "fast", implemented: true },
+  { from: "webp", to: "png", engine: "image", tier: "fast", implemented: true },
+  { from: "webp", to: "gif", engine: "image", tier: "fast", implemented: true },
+  { from: "webp", to: "tiff", engine: "image", tier: "fast", implemented: true },
+  { from: "webp", to: "avif", engine: "image", tier: "fast", implemented: true },
+  { from: "gif", to: "jpg", engine: "image", tier: "fast", implemented: true },
+  { from: "gif", to: "png", engine: "image", tier: "fast", implemented: true },
+  { from: "gif", to: "webp", engine: "image", tier: "fast", implemented: true },
+  { from: "gif", to: "tiff", engine: "image", tier: "fast", implemented: true },
+  { from: "gif", to: "avif", engine: "image", tier: "fast", implemented: true },
+  { from: "tiff", to: "jpg", engine: "image", tier: "fast", implemented: true },
+  { from: "tiff", to: "png", engine: "image", tier: "fast", implemented: true },
+  { from: "tiff", to: "webp", engine: "image", tier: "fast", implemented: true },
+  { from: "tiff", to: "gif", engine: "image", tier: "fast", implemented: true },
+  { from: "tiff", to: "avif", engine: "image", tier: "fast", implemented: true },
+  { from: "avif", to: "jpg", engine: "image", tier: "fast", implemented: true },
+  { from: "avif", to: "png", engine: "image", tier: "fast", implemented: true },
+  { from: "avif", to: "webp", engine: "image", tier: "fast", implemented: true },
+  { from: "avif", to: "gif", engine: "image", tier: "fast", implemented: true },
+  { from: "avif", to: "tiff", engine: "image", tier: "fast", implemented: true },
 ];
 
 // tar.gz is a compound extension (two dots) — findConversion/validatePair
