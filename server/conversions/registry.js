@@ -411,6 +411,13 @@ const CONVERSIONS = [
   { from: "xlsx", to: "xls", engine: "libreoffice", tier: "slow", implemented: true },
   { from: "csv", to: "xlsx", engine: "libreoffice", tier: "slow", implemented: true },
   { from: "csv", to: "ods", engine: "libreoffice", tier: "slow", implemented: true },
+
+  // ---- Task 5.10.3: direct CSV-to-document pairs (pandoc native reader) ----
+  { from: "csv", to: "pdf", engine: "pandoc", tier: "medium", implemented: true },
+  { from: "csv", to: "docx", engine: "pandoc", tier: "medium", implemented: true },
+  { from: "csv", to: "html", engine: "pandoc", tier: "medium", implemented: true },
+  { from: "csv", to: "odt", engine: "pandoc", tier: "medium", implemented: true },
+  { from: "csv", to: "md", engine: "pandoc", tier: "medium", implemented: true },
   { from: "json", to: "xlsx", engine: "data", tier: "slow", implemented: true },
   { from: "ods", to: "xlsx", engine: "libreoffice", tier: "slow", implemented: true },
   { from: "ods", to: "xls", engine: "libreoffice", tier: "slow", implemented: true },

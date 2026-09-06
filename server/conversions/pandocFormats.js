@@ -23,7 +23,13 @@ const EXT_TO_PANDOC_FORMAT = {
                 // pandoc-engine pptx->* source pairs, only md->pptx as a
                 // target), but toPandocFormat() doesn't distinguish
                 // read/write direction, so one entry covers it.
+                  csv: "csv", // Pandoc has a native CSV reader (renders as a table) —
+              // confirmed via `pandoc --list-input-formats`, not assumed
+              // from memory. Write-only entries in registry.js (csv is
+              // never a pandoc-engine *target*), same read/write
+              // non-distinction as the pptx entry above.
   txt: "markdown", // plain text has no markdown syntax to misinterpret, so
+
                    // reading .txt as Pandoc's "markdown" format is safe and
                    // is the standard workaround since Pandoc has no
                    // dedicated plain-text reader. Added for the 4 new
