@@ -36,6 +36,10 @@ const EXT_TO_PANDOC_FORMAT = {
                   // as a *target* here — ipynb as a *source* routes
                   // through nbconvertHandler.js instead, a different
                   // engine), same non-distinction pattern as pptx/csv.
+  epub: "epub", // Pandoc has a native EPUB reader and writer — confirmed via
+                // `pandoc --list-input-formats` and `--list-output-formats`,
+                // not assumed from memory. Added for Task 5.11 (6 pairs:
+                // md/html/docx <-> epub), zero new dependency.
   txt: "markdown", // plain text has no markdown syntax to misinterpret, so
 
                    // reading .txt as Pandoc's "markdown" format is safe and

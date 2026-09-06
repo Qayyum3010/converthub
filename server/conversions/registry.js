@@ -457,6 +457,14 @@ const CONVERSIONS = [
 
   // ---- Task 5.10.7: BibTeX CSV output ----
   { from: "bib", to: "csv", engine: "bibtex", tier: "fast", implemented: true },
+
+  // ---- Task 5.11: EPUB via Pandoc (zero new dependency) ----
+  { from: "md", to: "epub", engine: "pandoc", tier: "medium", implemented: true },
+  { from: "html", to: "epub", engine: "pandoc", tier: "medium", implemented: true },
+  { from: "docx", to: "epub", engine: "pandoc", tier: "medium", implemented: true },
+  { from: "epub", to: "md", engine: "pandoc", tier: "medium", implemented: true },
+  { from: "epub", to: "html", engine: "pandoc", tier: "medium", implemented: true },
+  { from: "epub", to: "docx", engine: "pandoc", tier: "medium", implemented: true },
   // ---- Raster image cross-matrix (Task 5.9.2) ----
   // Tier TBD — every pair below is provisionally "fast" (sharp/libvips is
   // typically sub-second per the task's own scope note), but this must be
