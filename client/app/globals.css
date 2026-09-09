@@ -4,143 +4,64 @@
 
 @theme {
   /* Fonts */
-  --font-body-lg: var(--font-inter), sans-serif;
-  --font-label-sm: var(--font-inter), sans-serif;
-  --font-body-md: var(--font-inter), sans-serif;
-  --font-headline-md: var(--font-inter), sans-serif;
-  --font-headline-lg: var(--font-inter), sans-serif;
-  --font-display-lg: var(--font-inter), sans-serif;
-  --font-technical-mono: var(--font-jetbrains-mono), monospace;
+  --font-display: var(--font-space-grotesk), sans-serif;
+  --font-body: var(--font-plex-sans), sans-serif;
+  --font-technical: var(--font-plex-mono), monospace;
 
-  /* Light colors (default) */
-  --color-primary: #004ac6;
-  --color-on-primary: #ffffff;
-  --color-primary-container: #2563eb;
-  --color-on-primary-container: #eeefff;
-  --color-primary-fixed: #dbe1ff;
-  --color-primary-fixed-dim: #b4c5ff;
-  --color-on-primary-fixed: #00174b;
-  --color-on-primary-fixed-variant: #003ea8;
-  --color-inverse-primary: #b4c5ff;
+  /* Core palette — light (default) */
+  --color-ink: #15202b;
+  --color-paper: #f7f6f2;
+  --color-paper-raised: #ffffff;
+  --color-route: #2b5fd9;
+  --color-route-hover: #1f4bb8;
+  --color-on-route: #ffffff;
+  --color-graphite: #6b7280;
+  --color-graphite-light: #d1d5db;
+  --color-amber: #d98e2b;
+  --color-amber-bg: #fbf0dd;
+  --color-moss: #3f8a5d;
+  --color-moss-bg: #e3f2e9;
+  --color-error: #c53030;
+  --color-error-bg: #fbe8e8;
 
-  --color-secondary: #505f76;
-  --color-on-secondary: #ffffff;
-  --color-secondary-container: #d0e1fb;
-  --color-on-secondary-container: #54647a;
-  --color-secondary-fixed: #d3e4fe;
-  --color-secondary-fixed-dim: #b7c8e1;
-  --color-on-secondary-fixed: #0b1c30;
-  --color-on-secondary-fixed-variant: #38485d;
-
-  --color-tertiary: #525657;
-  --color-on-tertiary: #ffffff;
-  --color-tertiary-container: #6b6e70;
-  --color-on-tertiary-container: #eff1f3;
-  --color-tertiary-fixed: #e0e3e5;
-  --color-tertiary-fixed-dim: #c4c7c9;
-  --color-on-tertiary-fixed: #191c1e;
-  --color-on-tertiary-fixed-variant: #444749;
-
-  --color-error: #ba1a1a;
-  --color-on-error: #ffffff;
-  --color-error-container: #ffdad6;
-  --color-on-error-container: #93000a;
-
-  --color-background: #faf8ff;
-  --color-on-background: #191b23;
-  --color-surface: #faf8ff;
-  --color-surface-dim: #d9d9e5;
-  --color-surface-bright: #faf8ff;
-  --color-surface-container-lowest: #ffffff;
-  --color-surface-container-low: #f3f3fe;
-  --color-surface-container: #ededf9;
-  --color-surface-container-high: #e7e7f3;
-  --color-surface-container-highest: #e1e2ed;
-  --color-on-surface: #191b23;
-  --color-on-surface-variant: #434655;
-  --color-surface-variant: #e1e2ed;
-  --color-inverse-surface: #2e3039;
-  --color-inverse-on-surface: #f0f0fb;
-
-  --color-outline: #737686;
-  --color-outline-variant: #c3c6d7;
-  --color-surface-tint: #0053db;
-
-  /* Spacing scale */
-  --spacing-base: 4px;
-  --spacing-xs: 8px;
-  --spacing-sm: 16px;
-  --spacing-md: 24px;
-  --spacing-gutter: 24px;
-  --spacing-lg: 40px;
-  --spacing-xl: 64px;
+  /* Spacing scale (namespaced under "gap-*" instead of overriding
+     Tailwind's own spacing scale, which max-w, padding, and margin
+     utilities all derive from — the earlier collision broke max-w-xl
+     and max-w-md) */
+  --spacing-gap-xs: 8px;
+  --spacing-gap-sm: 16px;
+  --spacing-gap-md: 24px;
+  --spacing-gap-lg: 40px;
+  --spacing-gap-xl: 64px;
   --container-max: 1200px;
 
-  /* Radii */
-  --radius-DEFAULT: 0.25rem;
-  --radius-lg: 0.5rem;
-  --radius-xl: 0.75rem;
+  /* Radii — restrained, not the SaaS-card default on everything */
+  --radius-sm: 4px;
+  --radius-md: 8px;
 }
 
 /* Dark theme overrides — same token names, swapped values */
 .dark {
-  --color-primary: #b4c5ff;
-  --color-on-primary: #00174b;
-  --color-primary-container: #3d6bff;
-  --color-on-primary-container: #dbe1ff;
-  --color-primary-fixed: #dbe1ff;
-  --color-primary-fixed-dim: #b4c5ff;
-  --color-on-primary-fixed: #00174b;
-  --color-on-primary-fixed-variant: #003ea8;
-  --color-inverse-primary: #004ac6;
-
-  --color-secondary: #b7c8e1;
-  --color-on-secondary: #22324a;
-  --color-secondary-container: #38485d;
-  --color-on-secondary-container: #d3e4fe;
-  --color-secondary-fixed: #d3e4fe;
-  --color-secondary-fixed-dim: #b7c8e1;
-  --color-on-secondary-fixed: #0b1c30;
-  --color-on-secondary-fixed-variant: #38485d;
-
-  --color-tertiary: #c4c7c9;
-  --color-on-tertiary: #2c2f30;
-  --color-tertiary-container: #444749;
-  --color-on-tertiary-container: #e0e3e5;
-  --color-tertiary-fixed: #e0e3e5;
-  --color-tertiary-fixed-dim: #c4c7c9;
-  --color-on-tertiary-fixed: #191c1e;
-  --color-on-tertiary-fixed-variant: #444749;
-
-  --color-error: #ffb4ab;
-  --color-on-error: #690005;
-  --color-error-container: #93000a;
-  --color-on-error-container: #ffdad6;
-
-  --color-background: #12131a;
-  --color-on-background: #e2e2ec;
-  --color-surface: #12131a;
-  --color-surface-dim: #12131a;
-  --color-surface-bright: #38393f;
-  --color-surface-container-lowest: #0c0d13;
-  --color-surface-container-low: #191b23;
-  --color-surface-container: #1d1f27;
-  --color-surface-container-high: #282a32;
-  --color-surface-container-highest: #33343d;
-  --color-on-surface: #e2e2ec;
-  --color-on-surface-variant: #c3c6d7;
-  --color-surface-variant: #434655;
-  --color-inverse-surface: #e2e2ec;
-  --color-inverse-on-surface: #2e3039;
-
-  --color-outline: #8d909f;
-  --color-outline-variant: #434655;
-  --color-surface-tint: #b4c5ff;
+  --color-ink: #eef1f5;
+  --color-paper: #10161d;
+  --color-paper-raised: #182028;
+  --color-route: #6690f2;
+  --color-route-hover: #86a8ff;
+  --color-on-route: #0b1420;
+  --color-graphite: #9aa3ad;
+  --color-graphite-light: #2c3540;
+  --color-amber: #e6a648;
+  --color-amber-bg: #2e2412;
+  --color-moss: #57b381;
+  --color-moss-bg: #14261c;
+  --color-error: #e57373;
+  --color-error-bg: #2e1616;
 }
 
 body {
-  background: var(--color-background);
-  color: var(--color-on-surface);
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-body);
   transition:
     background-color 0.2s ease,
     color 0.2s ease;

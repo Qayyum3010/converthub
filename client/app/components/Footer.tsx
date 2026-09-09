@@ -3,8 +3,8 @@ export default function Footer() {
 
   return (
     <footer className="bg-surface-container-low border-t border-outline-variant mt-auto">
-      <div className="w-full py-md px-sm md:px-xl flex flex-col md:flex-row justify-between items-center gap-sm max-w-[1200px] mx-auto">
-        <div className="text-center md:text-left">
+      <div className="w-full py-md px-sm md:px-xl flex flex-col items-center gap-sm max-w-[1200px] mx-auto">
+        <div className="text-center">
           <span className="font-headline-md text-lg font-bold text-on-surface block mb-1">
             ConvertHub
           </span>

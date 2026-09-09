@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { ArrowLeft, Upload, X, AlertTriangle, Lock } from "lucide-react";
 import Header from "../components/Header";
 import Footer from "../components/Footer";
+import PairConnector from "../components/PairConnector";
 import { useConversion } from "../context/ConversionContext";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
@@ -15,20 +17,49 @@ function formatBytes(bytes: number) {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
-export default function ConversionWorkspace() {
+// Compound extensions (two dots) need special handling — the naive
+// split(".").pop() approach returns "gz" for "archive.tar.gz", losing the
+// "tar." part. Mirrors the same COMPOUND_EXTENSIONS check already done
+// server-side in the /upload route, for the same reason.
+const COMPOUND_EXTENSIONS = [".tar.gz"];
+
+function extOf(file: File) {
+  const lowerName = file.name.toLowerCase();
+  const matchedCompound = COMPOUND_EXTENSIONS.find((c) => lowerName.endsWith(c));
+  if (matchedCompound) return matchedCompound.replace(/^\./, "");
+  return file.name.split(".").pop()?.toLowerCase() ?? "";
+}
+
+export default function ConversionWorkspacePage() {
+  return (
+    <Suspense>
+      <ConversionWorkspace />
+    </Suspense>
+  );
+}
+
+function ConversionWorkspace() {
   const router = useRouter();
-  const { file, presetTargetExt, setFile, setPresetTargetExt } =
+  const searchParams = useSearchParams();
+  const { files, presetTargetExt, addFiles, removeFile, setPresetTargetExt, recordFileNames, reset } =
     useConversion();
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const [formats, setFormats] = useState<Record<string, string[]> | null>(null);
   const [formatsError, setFormatsError] = useState<string | null>(null);
-  const [selectedTarget, setSelectedTarget] = useState<string | null>(
-    presetTargetExt,
-  );
-  const [submitState, setSubmitState] = useState<
-    "idle" | "uploading" | "converting" | "error"
-  >("idle");
+  const [selectedTarget, setSelectedTarget] = useState<string | null>(presetTargetExt);
+  const [submitState, setSubmitState] = useState<"idle" | "uploading" | "converting" | "error">("idle");
   const [submitError, setSubmitError] = useState<string | null>(null);
+
+  // Query params from a Browse Formats / popular-pair click (?from=&to=)
+  // pre-select a target even before a file is dropped.
+  useEffect(() => {
+    const to = searchParams.get("to");
+    if (to && !selectedTarget) setSelectedTarget(to);
+    // Intentionally only runs once on mount from the URL — not re-synced
+    // if the user later changes the dropdown, to avoid fighting their choice.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     fetch(`${API_URL}/formats`)
@@ -42,174 +73,217 @@ export default function ConversionWorkspace() {
       );
   }, []);
 
-  const sourceExt = file
-    ? (file.name.split(".").pop()?.toLowerCase() ?? "")
-    : null;
+  // The backend applies one sourceExt/targetExt to an entire batch — so
+  // the batch's "source format" is whatever the FIRST file is. Any
+  // later-added file with a different extension can't ride along in the
+  // same /convert call, so we flag it rather than silently drop or break.
+  const sourceExt = files.length > 0 ? extOf(files[0]) : null;
+  const mismatchedFiles = useMemo(
+    () => files.filter((f) => extOf(f) !== sourceExt),
+    [files, sourceExt],
+  );
+  const validFiles = useMemo(
+    () => files.filter((f) => extOf(f) === sourceExt),
+    [files, sourceExt],
+  );
+
   const targetOptions = sourceExt && formats ? (formats[sourceExt] ?? []) : [];
-  const isUnsupportedSource =
-    formats && sourceExt !== null && !(sourceExt in formats);
+  const isUnsupportedSource = formats && sourceExt !== null && !(sourceExt in formats);
+
+  const handleFilesAdded = (newFiles: File[]) => {
+    addFiles(newFiles);
+  };
+
+  const handleBrowse = (e: React.ChangeEvent<HTMLInputElement>) => {
+    handleFilesAdded(Array.from(e.target.files ?? []));
+    e.target.value = "";
+  };
 
   const handleConvert = async () => {
-    if (!file || !sourceExt || !selectedTarget) return;
+    if (validFiles.length === 0 || !sourceExt || !selectedTarget) return;
     setSubmitState("uploading");
     setSubmitError(null);
 
     try {
-      const body = new FormData();
-      body.append("file", file);
-      const uploadRes = await fetch(`${API_URL}/upload`, {
-        method: "POST",
-        body,
-      });
-      const uploadData = await uploadRes.json();
-      if (!uploadRes.ok) {
-        throw new Error(uploadData.error || "Upload failed.");
+      const uploadedIds: string[] = [];
+      const newFileNames: Record<string, string> = {};
+      for (const file of validFiles) {
+        const body = new FormData();
+        body.append("file", file);
+        const uploadRes = await fetch(`${API_URL}/upload`, { method: "POST", body });
+        const uploadData = await uploadRes.json();
+        if (!uploadRes.ok) throw new Error(uploadData.error || `Upload failed for ${file.name}.`);
+        uploadedIds.push(uploadData.fileId);
+        newFileNames[uploadData.fileId] = file.name;
       }
+      recordFileNames(newFileNames);
 
       setSubmitState("converting");
       const convertRes = await fetch(`${API_URL}/convert`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          fileId: uploadData.fileId,
-          sourceExt,
-          targetExt: selectedTarget,
-        }),
+        body: JSON.stringify(
+          uploadedIds.length > 1
+            ? {
+                fileIds: uploadedIds,
+                sourceExt,
+                targetExt: selectedTarget,
+                fileNames: newFileNames,
+              }
+            : {
+                fileId: uploadedIds[0],
+                sourceExt,
+                targetExt: selectedTarget,
+                fileNames: newFileNames,
+              },
+        ),
       });
       const convertData = await convertRes.json();
-      if (!convertRes.ok) {
-        throw new Error(convertData.error || "Conversion failed to start.");
-      }
+      if (!convertRes.ok) throw new Error(convertData.error || "Conversion failed to start.");
 
       router.push(`/job/${convertData.jobId}`);
     } catch (err) {
       setSubmitState("error");
-      setSubmitError(
-        err instanceof Error ? err.message : "Something went wrong.",
-      );
+      setSubmitError(err instanceof Error ? err.message : "Something went wrong.");
     }
   };
 
-  const removeFile = () => {
-    setFile(null);
-    setPresetTargetExt(null);
+  const clearAll = useCallback(() => {
+    reset();
     setSelectedTarget(null);
-  };
+  }, [reset]);
 
   return (
-    <>
+    <div className="min-h-screen flex flex-col bg-paper">
       <Header />
-      <main className="flex-1 w-full max-w-[1200px] mx-auto px-sm md:px-md xl:px-xl py-md md:py-lg flex flex-col gap-md md:gap-lg">
-        <div className="flex flex-col gap-xs md:gap-sm">
+      <main className="flex-1 w-full max-w-[1200px] mx-auto px-4 md:px-16 py-8 md:py-12 flex flex-col gap-6 md:gap-10">
+        <div className="flex flex-col gap-2">
           <Link
             href="/"
-            className="flex items-center gap-1 text-secondary hover:text-primary transition-colors w-fit font-label-sm text-sm"
+            className="flex items-center gap-1.5 text-graphite hover:text-route transition-colors w-fit font-body text-sm"
           >
-            <span className="material-symbols-outlined text-base">
-              arrow_back
-            </span>
+            <ArrowLeft className="w-4 h-4" strokeWidth={2} />
             Back to Home
           </Link>
-          <h1 className="font-headline-lg text-xl md:text-2xl xl:text-3xl text-on-background font-bold">
+          <h1 className="font-display text-2xl md:text-3xl text-ink font-semibold">
             Conversion Workspace
           </h1>
         </div>
 
         {formatsError && (
-          <div className="bg-error-container border border-error text-on-error-container rounded-lg p-sm flex items-center gap-sm text-sm">
-            <span className="material-symbols-outlined text-error">
-              warning
-            </span>
+          <div className="bg-error-bg border border-error/30 text-error rounded-md p-4 flex items-center gap-3 text-sm font-body">
+            <AlertTriangle className="w-4 h-4 shrink-0" strokeWidth={2} />
             {formatsError}
           </div>
         )}
 
-        {!file ? (
-          <div className="bg-surface-container-lowest border border-outline-variant rounded-xl p-lg text-center flex flex-col items-center gap-sm">
-            <p className="font-body-md text-on-surface-variant">
-              No file selected yet.
-            </p>
-            <Link
-              href="/"
-              className="bg-primary-container text-white px-md py-xs rounded-lg font-label-sm font-medium hover:bg-primary transition-colors"
+        {files.length === 0 ? (
+          <div
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={(e) => {
+              e.preventDefault();
+              handleFilesAdded(Array.from(e.dataTransfer.files));
+            }}
+            className="rounded-md border-2 border-dashed border-graphite-light bg-paper-raised p-12 md:p-16 text-center flex flex-col items-center gap-4"
+          >
+            <div className="w-14 h-14 rounded-full bg-route/10 flex items-center justify-center">
+              <Upload className="w-6 h-6 text-route" strokeWidth={2} />
+            </div>
+            <p className="font-body text-graphite">Drag files here, or</p>
+            <button
+              onClick={() => inputRef.current?.click()}
+              className="inline-flex items-center gap-2 rounded-md bg-route hover:bg-route-hover text-on-route font-body font-medium text-sm px-5 py-2.5 transition-colors duration-150"
             >
-              Choose a file on the Home screen
-            </Link>
+              Browse files
+            </button>
+            <input ref={inputRef} type="file" multiple onChange={handleBrowse} className="hidden" />
           </div>
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-md md:gap-gutter">
-            {/* Left column: main actions */}
-            <div className="lg:col-span-8 flex flex-col gap-md">
-              {/* File preview card */}
-              <div className="bg-surface-container-lowest border border-outline-variant rounded-xl p-sm md:p-md shadow-[0_4px_12px_rgba(0,0,0,0.04)] flex items-center justify-between gap-xs md:gap-sm">
-                <div className="flex items-center gap-xs md:gap-md min-w-0">
-                  <div className="w-9 h-9 md:w-12 md:h-12 shrink-0 bg-primary-fixed text-on-primary-fixed rounded-lg flex items-center justify-center">
-                    <span className="material-symbols-outlined text-lg md:text-xl">
-                      description
-                    </span>
-                  </div>
-                  <div className="flex flex-col min-w-0">
-                    <span className="font-label-sm text-on-surface truncate">
-                      {file.name}
-                    </span>
-                    <div className="flex items-center gap-xs text-secondary text-sm">
-                      <span className="font-technical-mono">
-                        {formatBytes(file.size)}
-                      </span>
-                      {isUnsupportedSource && (
-                        <>
-                          <span>•</span>
-                          <span className="font-technical-mono text-error">
-                            Unsupported format
-                          </span>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                </div>
+          <div className="flex flex-col gap-4">
+              <div className="flex items-center justify-between">
+                <p className="font-body text-sm text-graphite">
+                  {validFiles.length} file{validFiles.length !== 1 ? "s" : ""} ready
+                </p>
                 <button
-                  onClick={removeFile}
-                  aria-label="Remove file"
-                  className="shrink-0 text-secondary hover:text-error transition-colors p-xs rounded-full hover:bg-surface-variant"
+                  onClick={clearAll}
+                  className="font-body text-sm text-graphite hover:text-error transition-colors"
                 >
-                  <span className="material-symbols-outlined">delete</span>
+                  Clear all
                 </button>
               </div>
 
+              <div className="flex flex-col gap-2">
+                {files.map((file, i) => {
+                  const mismatched = mismatchedFiles.includes(file);
+                  return (
+                    <div
+                      key={`${file.name}-${i}`}
+                      className={`bg-paper-raised border rounded-md p-3 flex items-center justify-between gap-3 ${
+                        mismatched ? "border-error/40" : "border-graphite-light"
+                      }`}
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-9 h-9 shrink-0 rounded-md bg-route/10 flex items-center justify-center">
+                          <span className="font-technical text-[10px] uppercase text-route">
+                            {extOf(file) || "?"}
+                          </span>
+                        </div>
+                        <div className="flex flex-col min-w-0">
+                          <span className="font-body text-sm text-ink truncate">{file.name}</span>
+                          <div className="flex items-center gap-2 text-xs text-graphite font-technical">
+                            <span>{formatBytes(file.size)}</span>
+                            {mismatched && (
+                              <span className="text-error">
+                                Doesn&apos;t match .{sourceExt} — won&apos;t be included
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => removeFile(i)}
+                        aria-label={`Remove ${file.name}`}
+                        className="shrink-0 text-graphite hover:text-error transition-colors p-1.5 rounded-full hover:bg-error-bg"
+                      >
+                        <X className="w-4 h-4" strokeWidth={2} />
+                      </button>
+                    </div>
+                  );
+                })}
+                <button
+                  onClick={() => inputRef.current?.click()}
+                  className="font-body text-sm text-route hover:text-route-hover text-left mt-1"
+                >
+                  + Add more files
+                </button>
+                <input ref={inputRef} type="file" multiple onChange={handleBrowse} className="hidden" />
+              </div>
+
               {isUnsupportedSource && (
-                <div className="bg-error-container border border-error text-on-error-container rounded-lg p-sm flex items-center gap-sm text-sm">
-                  <span className="material-symbols-outlined text-error">
-                    warning
-                  </span>
+                <div className="bg-error-bg border border-error/30 text-error rounded-md p-4 flex items-center gap-3 text-sm font-body">
+                  <AlertTriangle className="w-4 h-4 shrink-0" strokeWidth={2} />
                   {`.${sourceExt} isn't a format ConvertHub can convert from yet.`}
                 </div>
               )}
 
-              {/* Target format selector — real registry pairs only */}
               {!isUnsupportedSource && targetOptions.length > 0 && (
-                <div className="bg-surface-container-lowest border border-outline-variant rounded-xl p-md shadow-[0_4px_12px_rgba(0,0,0,0.04)] flex flex-col gap-sm">
-                  <label className="font-label-sm text-on-surface font-semibold">
-                    Convert to
-                  </label>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-sm">
+                <div className="bg-paper-raised border border-graphite-light rounded-md p-4 flex flex-col gap-3">
+                  <label className="font-body text-sm text-ink font-medium">Convert to</label>
+                  <div className="grid grid-cols-3 md:grid-cols-4 gap-2">
                     {targetOptions.map((ext) => {
                       const active = selectedTarget === ext;
                       return (
                         <button
                           key={ext}
                           onClick={() => setSelectedTarget(ext)}
-                          className={`flex flex-col items-center gap-xs p-sm rounded-lg border-2 transition-all ${
+                          className={`flex items-center justify-center gap-2 py-2.5 rounded-md border font-technical text-sm uppercase transition-colors duration-150 ${
                             active
-                              ? "border-primary bg-primary-fixed/20 text-on-surface"
-                              : "border-outline-variant hover:border-primary hover:bg-surface-container text-secondary hover:text-on-surface"
+                              ? "border-route bg-route/10 text-route"
+                              : "border-graphite-light text-graphite hover:border-route hover:text-route"
                           }`}
                         >
-                          <span className="material-symbols-outlined text-3xl">
-                            description
-                          </span>
-                          <span className="font-technical-mono text-sm uppercase">
-                            {ext}
-                          </span>
+                          {sourceExt && <PairConnector />}
+                          {ext}
                         </button>
                       );
                     })}
@@ -218,99 +292,38 @@ export default function ConversionWorkspace() {
               )}
 
               {submitError && (
-                <div className="bg-error-container border border-error text-on-error-container rounded-lg p-sm flex items-center gap-sm text-sm">
-                  <span className="material-symbols-outlined text-error">
-                    error
-                  </span>
+                <div className="bg-error-bg border border-error/30 text-error rounded-md p-4 text-sm font-body">
                   {submitError}
                 </div>
               )}
 
-              {/* Primary action */}
               <button
                 onClick={handleConvert}
                 disabled={
                   !selectedTarget ||
+                  validFiles.length === 0 ||
                   submitState === "uploading" ||
                   submitState === "converting" ||
                   !!isUnsupportedSource
                 }
-                className="w-full h-14 md:h-16 rounded-xl font-headline-md text-base md:text-lg flex items-center justify-center gap-sm mt-sm transition-all disabled:bg-surface-variant disabled:text-outline disabled:cursor-not-allowed disabled:shadow-none bg-primary text-on-primary hover:bg-primary-container shadow-[0_4px_12px_rgba(0,74,198,0.25)] active:scale-[0.99]"
+                className="w-full h-14 rounded-md font-display text-base font-semibold flex items-center justify-center gap-2 mt-1 transition-colors duration-150 disabled:bg-graphite-light disabled:text-graphite disabled:cursor-not-allowed bg-route text-on-route hover:bg-route-hover"
               >
                 {submitState === "uploading" && "Uploading…"}
                 {submitState === "converting" && "Starting conversion…"}
-                {(submitState === "idle" || submitState === "error") && (
-                  <>
-                    Convert
-                    <span className="material-symbols-outlined">
-                      arrow_forward
-                    </span>
-                  </>
-                )}
+                {(submitState === "idle" || submitState === "error") &&
+                  (validFiles.length > 1 ? `Convert ${validFiles.length} files` : "Convert")}
               </button>
-            </div>
 
-            {/* Right column: info */}
-            <aside className="lg:col-span-4 flex flex-col gap-md">
-              <div className="bg-surface-container-lowest border border-outline-variant rounded-xl p-md shadow-[0_4px_12px_rgba(0,0,0,0.04)] flex flex-col gap-md">
-                <h3 className="font-headline-md text-lg text-on-surface">
-                  What happens next
-                </h3>
-                <div className="flex flex-col">
-                  {[
-                    {
-                      icon: "cloud_upload",
-                      label: "Upload",
-                      desc: "Securely upload your file.",
-                    },
-                    {
-                      icon: "sync",
-                      label: "Convert",
-                      desc: "We process your document format.",
-                    },
-                    {
-                      icon: "download",
-                      label: "Download",
-                      desc: "Get your freshly converted file.",
-                    },
-                  ].map((step, i, arr) => (
-                    <div key={step.label} className="flex gap-sm">
-                      <div className="flex flex-col items-center">
-                        <div className="w-9 h-9 shrink-0 rounded-full bg-primary-fixed text-on-primary-fixed flex items-center justify-center">
-                          <span className="material-symbols-outlined text-lg">
-                            {step.icon}
-                          </span>
-                        </div>
-                        {i < arr.length - 1 && (
-                          <div className="w-0.5 flex-1 min-h-[24px] bg-outline-variant my-1" />
-                        )}
-                      </div>
-                      <div className={i < arr.length - 1 ? "pb-md" : ""}>
-                        <span className="font-label-sm text-on-surface font-semibold block pt-1.5">
-                          {step.label}
-                        </span>
-                        <p className="font-body-md text-sm text-secondary">
-                          {step.desc}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <div className="bg-surface-container-low rounded-xl p-md flex gap-sm border border-outline-variant">
-                <span className="material-symbols-outlined text-secondary shrink-0">
-                  lock
-                </span>
-                <p className="font-label-sm text-xs text-secondary">
-                  Files are securely processed and automatically deleted after 1
-                  hour. We never share your data.
+              <div className="bg-paper-raised border border-graphite-light rounded-md p-4 flex gap-3">
+                <Lock className="w-4 h-4 shrink-0 text-graphite mt-0.5" strokeWidth={2} />
+                <p className="font-body text-xs text-graphite">
+                  Files are processed and automatically deleted after 1 hour. We never share your data.
                 </p>
               </div>
-            </aside>
-          </div>
+            </div>
         )}
       </main>
       <Footer />
-    </>
+    </div>
   );
 }

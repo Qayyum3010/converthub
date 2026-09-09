@@ -1,100 +1,139 @@
 "use client";
 
+import { useCallback, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Upload, FolderOpen, ChevronRight } from "lucide-react";
+import Link from "next/link";
 import Header from "./components/Header";
 import Footer from "./components/Footer";
-import UploadZone from "./components/UploadZone";
+import PairConnector from "./components/PairConnector";
 import { useConversion } from "./context/ConversionContext";
-import Link from "next/link";
 
-const popularConversions: { from: string; to: string }[] = [
-  { from: "MD", to: "PDF" },
-  { from: "DOCX", to: "PDF" },
-  { from: "CSV", to: "JSON" },
-  { from: "XLSX", to: "CSV" },
+const POPULAR_PAIRS: { from: string; to: string }[] = [
+  { from: "docx", to: "pdf" },
+  { from: "png", to: "webp" },
+  { from: "mp3", to: "wav" },
+  { from: "csv", to: "xlsx" },
+  { from: "heic", to: "jpg" },
+  { from: "md", to: "docx" },
 ];
 
 export default function Home() {
   const router = useRouter();
-  const { setPresetTargetExt } = useConversion();
+  const { addFiles, setPresetTargetExt } = useConversion();
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [isDragging, setIsDragging] = useState(false);
 
-  const selectPopularPair = (targetExt: string) => {
-    setPresetTargetExt(targetExt.toLowerCase());
-    router.push("/convert");
+  const goToWorkspace = useCallback(
+    (files: File[], presetTarget?: string) => {
+      if (files.length === 0) return;
+      addFiles(files);
+      setPresetTargetExt(presetTarget ?? null);
+      router.push("/convert");
+    },
+    [addFiles, setPresetTargetExt, router],
+  );
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const dropped = Array.from(e.dataTransfer.files);
+    goToWorkspace(dropped);
+  };
+
+  const handleBrowse = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selected = Array.from(e.target.files ?? []);
+    goToWorkspace(selected);
+  };
+
+  const handlePairClick = (pair: { from: string; to: string }) => {
+    // No file yet — send the person straight to the workspace with the
+    // target pre-selected; they'll drop a matching file once there.
+    setPresetTargetExt(pair.to);
+    router.push(`/convert?from=${pair.from}&to=${pair.to}`);
   };
 
   return (
-    <>
+    <div className="min-h-screen flex flex-col bg-paper">
       <Header />
-      <main className="flex-grow w-full max-w-[1200px] mx-auto px-sm md:px-md xl:px-xl py-lg md:py-xl flex flex-col items-center">
-        {/* Hero */}
-        <div className="text-center mb-lg md:mb-xl w-full max-w-3xl">
-          <h1 className="font-display-lg text-3xl md:text-5xl font-bold text-on-surface mb-sm leading-tight">
-            Convert any file, instantly
+
+      <main className="flex-1">
+        <section className="max-w-[1200px] mx-auto px-4 md:px-16 pt-16 md:pt-24 pb-12 md:pb-16 text-center">
+          <h1 className="font-display text-4xl md:text-6xl font-semibold text-ink leading-tight tracking-tight text-balance">
+            Convert almost anything
           </h1>
-          <p className="font-body-lg text-base md:text-lg text-on-surface-variant">
-            Free, no sign-up, files deleted automatically after 1 hour.
+          <p className="mt-4 font-body text-base md:text-lg text-graphite max-w-[36rem] w-full mx-auto">
+            200+ formats, no sign-up, no file-limit games. Drop a file and
+            we&apos;ll figure out where it can go.
           </p>
-        </div>
 
-        {/* Upload zone */}
-        <UploadZone />
-
-        {/* Popular conversions — real registry pairs only */}
-        <div className="w-full max-w-4xl mb-lg md:mb-xl mt-lg md:mt-xl">
-          <h3 className="font-label-sm text-xs md:text-sm text-on-surface-variant uppercase tracking-wider mb-sm text-center">
-            Popular Conversions
-          </h3>
-          <div className="flex flex-wrap justify-center gap-xs md:gap-sm mb-sm">
-            {popularConversions.map((pair) => (
-              <button
-                key={`${pair.from}-${pair.to}`}
-                onClick={() => selectPopularPair(pair.to)}
-                className="flex items-center gap-1.5 bg-surface-container-low hover:bg-surface-container active:scale-95 px-sm md:px-md py-xs rounded-full border border-outline-variant transition-all duration-150 group"
-              >
-                <span className="font-technical-mono text-xs md:text-sm text-error">
-                  {pair.from}
-                </span>
-                <span className="text-outline group-hover:text-on-surface group-hover:translate-x-0.5 transition-all duration-150">
-                  →
-                </span>
-                <span className="font-technical-mono text-xs md:text-sm text-primary">
-                  {pair.to}
-                </span>
-              </button>
-            ))}
-          </div>
-          <div className="text-center">
-            <Link
-              href="/all-conversions"
-              className="font-label-sm text-sm text-primary hover:underline underline-offset-4"
-            >
-              View all conversions →
-            </Link>
-          </div>
-        </div>
-
-        {/* PDF Tools banner — real feature, qpdf-backed */}
-        <div className="w-full max-w-4xl bg-secondary-container rounded-xl p-md md:p-lg flex flex-col md:flex-row items-center justify-between gap-sm border border-secondary-fixed-dim">
-          <div className="flex items-center gap-sm text-center md:text-left flex-col md:flex-row">
+          <div
+            onDragOver={(e) => {
+              e.preventDefault();
+              setIsDragging(true);
+            }}
+            onDragLeave={() => setIsDragging(false)}
+            onDrop={handleDrop}
+            className={`mt-10 mx-auto max-w-2xl rounded-md border-2 border-dashed transition-colors duration-200 px-6 py-14 md:py-16 flex flex-col items-center gap-4 ${
+              isDragging
+                ? "border-route bg-route/5"
+                : "border-graphite-light bg-paper-raised"
+            }`}
+          >
+            <div className="w-14 h-14 rounded-full bg-route/10 flex items-center justify-center">
+              <Upload className="w-6 h-6 text-route" strokeWidth={2} />
+            </div>
             <div>
-              <h3 className="font-headline-md text-lg md:text-2xl text-on-secondary-container font-semibold">
-                Need more PDF power?
-              </h3>
-              <p className="font-body-md text-sm md:text-base text-on-secondary-container opacity-90">
-                Merge, split, or compress PDF files quickly and easily.
+              <p className="font-body font-medium text-ink">
+                Drag files here, or
               </p>
             </div>
+            <button
+              onClick={() => inputRef.current?.click()}
+              className="inline-flex items-center gap-2 rounded-md bg-route hover:bg-route-hover text-on-route font-body font-medium text-sm px-5 py-2.5 transition-colors duration-150"
+            >
+              <FolderOpen className="w-4 h-4" strokeWidth={2} />
+              Browse files
+            </button>
+            <input
+              ref={inputRef}
+              type="file"
+              multiple
+              onChange={handleBrowse}
+              className="hidden"
+            />
           </div>
-          <a
-            href="/pdf-tools"
-            className="bg-surface-container-lowest text-primary px-md md:px-lg py-xs md:py-sm rounded-lg font-label-sm font-medium hover:bg-surface-container-low transition-colors whitespace-nowrap shadow-sm border border-outline-variant w-full md:w-auto text-center"
-          >
-            Go to PDF Tools
-          </a>
-        </div>
+        </section>
+
+        <section className="max-w-[1200px] mx-auto px-4 md:px-16 pb-16 md:pb-20">
+          <p className="font-body text-sm text-graphite mb-4 text-center">
+            Popular conversions
+          </p>
+          <div className="flex flex-wrap justify-center gap-3">
+            {POPULAR_PAIRS.map((pair) => (
+              <button
+                key={`${pair.from}-${pair.to}`}
+                onClick={() => handlePairClick(pair)}
+                className="inline-flex items-center gap-2 rounded-md border border-graphite-light bg-paper-raised px-4 py-2.5 font-technical text-sm text-ink hover:border-route hover:text-route transition-colors duration-150"
+              >
+                <span className="uppercase">{pair.from}</span>
+                <PairConnector />
+                <span className="uppercase">{pair.to}</span>
+              </button>
+            ))}
+            <Link
+              href="/formats"
+              className="inline-flex items-center gap-1.5 rounded-md px-4 py-2.5 font-body text-sm font-medium text-route hover:text-route-hover transition-colors duration-150"
+            >
+              See all formats
+              <ChevronRight className="w-4 h-4" strokeWidth={2} />
+            </Link>
+          </div>
+        </section>
       </main>
+
       <Footer />
-    </>
+    </div>
   );
 }
+

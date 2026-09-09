@@ -16,14 +16,18 @@ const CONVERSIONS = [
     from: "md",
     to: "pdf",
     engine: "pandoc",
-    tier: "medium",
+    tier: "slow",
     implemented: true,
   },
   {
     from: "md",
     to: "docx",
     engine: "pandoc",
-    tier: "medium",
+    // Bumped medium -> slow: pandoc must embed any remote images referenced
+    // in the markdown, and a failed/slow fetch (redirects, DNS, auth-gated
+    // hosts) can eat well past the medium budget before pandoc gives up.
+    // See DECISIONS.md, 2026-09-07.
+    tier: "slow",
     implemented: true,
   },
   { from: "html", to: "md", engine: "pandoc", tier: "fast", implemented: true },
@@ -31,7 +35,7 @@ const CONVERSIONS = [
     from: "html",
     to: "pdf",
     engine: "pandoc",
-    tier: "medium",
+    tier: "slow",
     implemented: true,
   },
   {
@@ -50,8 +54,9 @@ const CONVERSIONS = [
   },
 
   // ---- Task 5.10.2: RST made bidirectional ----
-  { from: "rst", to: "pdf", engine: "pandoc", tier: "medium", implemented: true },
-  { from: "rst", to: "docx", engine: "pandoc", tier: "medium", implemented: true },
+  { from: "rst", to: "pdf", engine: "pandoc", tier: "slow", implemented: true },
+  // Bumped medium -> slow: image-embedding target, see note above.
+  { from: "rst", to: "docx", engine: "pandoc", tier: "slow", implemented: true },
   { from: "rst", to: "md", engine: "pandoc", tier: "medium", implemented: true },
   { from: "rst", to: "txt", engine: "pandoc", tier: "fast", implemented: true },
   { from: "md", to: "rst", engine: "pandoc", tier: "medium", implemented: true },
@@ -61,7 +66,8 @@ const CONVERSIONS = [
     from: "rtf",
     to: "docx",
     engine: "pandoc",
-    tier: "medium",
+    // Bumped medium -> slow: image-embedding target, see note above.
+    tier: "slow",
     implemented: true,
   },
   {
@@ -138,7 +144,8 @@ const CONVERSIONS = [
     from: "tex",
     to: "docx",
     engine: "pandoc",
-    tier: "medium",
+    // Bumped medium -> slow: image-embedding target, see note above.
+    tier: "slow",
     implemented: true,
   },
 
@@ -412,14 +419,19 @@ const CONVERSIONS = [
   { from: "odt", to: "doc", engine: "libreoffice", tier: "slow", implemented: true },
   { from: "odt", to: "pdf", engine: "libreoffice", tier: "slow", implemented: true },
   { from: "odt", to: "txt", engine: "libreoffice", tier: "slow", implemented: true },
-  { from: "rtf", to: "pdf", engine: "pandoc", tier: "medium", implemented: true },
+  { from: "rtf", to: "pdf", engine: "pandoc", tier: "slow", implemented: true },
   { from: "rtf", to: "html", engine: "pandoc", tier: "medium", implemented: true },
   { from: "rtf", to: "odt", engine: "libreoffice", tier: "slow", implemented: true },
-  { from: "docx", to: "rtf", engine: "pandoc", tier: "medium", implemented: true },
-  { from: "md", to: "rtf", engine: "pandoc", tier: "medium", implemented: true },
-  { from: "md", to: "odt", engine: "pandoc", tier: "medium", implemented: true },
-  { from: "html", to: "docx", engine: "pandoc", tier: "medium", implemented: true },
-    { from: "html", to: "odt", engine: "pandoc", tier: "medium", implemented: true },
+  // Bumped medium -> slow: image-embedding target, see note above.
+  { from: "docx", to: "rtf", engine: "pandoc", tier: "slow", implemented: true },
+  // Bumped medium -> slow: image-embedding target, see note above.
+  { from: "md", to: "rtf", engine: "pandoc", tier: "slow", implemented: true },
+  // Bumped medium -> slow: image-embedding target, see note above.
+  { from: "md", to: "odt", engine: "pandoc", tier: "slow", implemented: true },
+  // Bumped medium -> slow: image-embedding target, see note above.
+  { from: "html", to: "docx", engine: "pandoc", tier: "slow", implemented: true },
+  // Bumped medium -> slow: image-embedding target, see note above.
+    { from: "html", to: "odt", engine: "pandoc", tier: "slow", implemented: true },
 
   // ---- Spreadsheet family (Task 5.8.2) ----
   { from: "xls", to: "xlsx", engine: "libreoffice", tier: "slow", implemented: true },
@@ -432,10 +444,12 @@ const CONVERSIONS = [
   { from: "csv", to: "ods", engine: "libreoffice", tier: "slow", implemented: true },
 
   // ---- Task 5.10.3: direct CSV-to-document pairs (pandoc native reader) ----
-  { from: "csv", to: "pdf", engine: "pandoc", tier: "medium", implemented: true },
-  { from: "csv", to: "docx", engine: "pandoc", tier: "medium", implemented: true },
+  { from: "csv", to: "pdf", engine: "pandoc", tier: "slow", implemented: true },
+  // Bumped medium -> slow: image-embedding target, see note above.
+  { from: "csv", to: "docx", engine: "pandoc", tier: "slow", implemented: true },
   { from: "csv", to: "html", engine: "pandoc", tier: "medium", implemented: true },
-  { from: "csv", to: "odt", engine: "pandoc", tier: "medium", implemented: true },
+  // Bumped medium -> slow: image-embedding target, see note above.
+  { from: "csv", to: "odt", engine: "pandoc", tier: "slow", implemented: true },
   { from: "csv", to: "md", engine: "pandoc", tier: "medium", implemented: true },
   { from: "json", to: "xlsx", engine: "data", tier: "slow", implemented: true },
   { from: "ods", to: "xlsx", engine: "libreoffice", tier: "slow", implemented: true },
@@ -451,7 +465,7 @@ const CONVERSIONS = [
   { from: "odp", to: "pptx", engine: "libreoffice", tier: "slow", implemented: true },
   { from: "odp", to: "ppt", engine: "libreoffice", tier: "slow", implemented: true },
   { from: "odp", to: "pdf", engine: "libreoffice", tier: "slow", implemented: true },
-  { from: "md", to: "pptx", engine: "pandoc", tier: "medium", implemented: true },
+  { from: "md", to: "pptx", engine: "pandoc", tier: "slow", implemented: true },
   { from: "svg", to: "pdf", engine: "libreoffice", tier: "slow", implemented: true },
   { from: "bib", to: "xml", engine: "bibtex", tier: "fast", implemented: true },
 
@@ -499,12 +513,16 @@ const CONVERSIONS = [
   { from: "aac", to: "m4a", engine: "audio", tier: "fast", implemented: true },
 
   // ---- Task 5.11: EPUB via Pandoc (zero new dependency) ----
-  { from: "md", to: "epub", engine: "pandoc", tier: "medium", implemented: true },
-  { from: "html", to: "epub", engine: "pandoc", tier: "medium", implemented: true },
-  { from: "docx", to: "epub", engine: "pandoc", tier: "medium", implemented: true },
+  // Bumped medium -> slow: image-embedding target, see note above.
+  { from: "md", to: "epub", engine: "pandoc", tier: "slow", implemented: true },
+  // Bumped medium -> slow: image-embedding target, see note above.
+  { from: "html", to: "epub", engine: "pandoc", tier: "slow", implemented: true },
+  // Bumped medium -> slow: image-embedding target, see note above.
+  { from: "docx", to: "epub", engine: "pandoc", tier: "slow", implemented: true },
   { from: "epub", to: "md", engine: "pandoc", tier: "medium", implemented: true },
   { from: "epub", to: "html", engine: "pandoc", tier: "medium", implemented: true },
-  { from: "epub", to: "docx", engine: "pandoc", tier: "medium", implemented: true },
+  // Bumped medium -> slow: image-embedding target, see note above.
+  { from: "epub", to: "docx", engine: "pandoc", tier: "slow", implemented: true },
   // ---- Raster image cross-matrix (Task 5.9.2) ----
   // Tier TBD — every pair below is provisionally "fast" (sharp/libvips is
   // typically sub-second per the task's own scope note), but this must be

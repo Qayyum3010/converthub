@@ -28,6 +28,7 @@ async function convertWithLibreOffice(
   outputPath,
   targetFormat,
   infilter = null,
+  originalFilename = null,
 ) {
   // Isolated scratch dir per job — avoids collisions if multiple jobs with
   // the same input basename run concurrently, and keeps --outdir predictable.
@@ -37,6 +38,24 @@ async function convertWithLibreOffice(
     crypto.randomUUID(),
   );
   fs.mkdirSync(scratchDir, { recursive: true });
+
+  // Uploaded files live on disk as "{fileId}.{ext}" (see registry.js/upload
+  // route notes). LibreOffice opens whatever path we hand it, and if the
+  // source document has a dynamic "filename" header/footer field (e.g.
+  // Excel/Calc's &[File]), that field re-evaluates against the ACTUAL
+  // opened path at export time — so the raw fileId ends up baked into the
+  // rendered PDF/output instead of anything meaningful. Copying the input
+  // into the scratch dir under its original (sanitized) filename before
+  // conversion means any such dynamic field resolves to something sensible
+  // instead of a UUID. Falls back to the existing fileId-based basename
+  // when no original filename is available (keeps old callers working).
+  // See DECISIONS.md, 2026-09-08.
+  const sourceExt = path.extname(inputPath);
+  const safeOriginalBase = originalFilename
+    ? path.basename(originalFilename, path.extname(originalFilename)).replace(/["\r\n/\\]/g, "_")
+    : path.basename(inputPath, sourceExt);
+  const workingInputPath = path.join(scratchDir, `${safeOriginalBase}${sourceExt}`);
+  fs.copyFileSync(inputPath, workingInputPath);
 
   // LibreOffice headless uses a single shared user-profile lock by default —
   // concurrent soffice invocations fight over it, and the loser exits early
@@ -63,15 +82,14 @@ async function convertWithLibreOffice(
     args.push(`--infilter=${infilter}`);
   }
 
-  args.push("--convert-to", targetFormat, "--outdir", scratchDir, inputPath);
+  args.push("--convert-to", targetFormat, "--outdir", scratchDir, workingInputPath);
 
   try {
     await execFileAsync("soffice", args);
 
-    const inputBasename = path.basename(inputPath, path.extname(inputPath));
     const producedPath = path.join(
       scratchDir,
-      `${inputBasename}.${targetFormat}`,
+      `${safeOriginalBase}.${targetFormat}`,
     );
 
     if (!fs.existsSync(producedPath)) {

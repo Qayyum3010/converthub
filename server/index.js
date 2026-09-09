@@ -192,8 +192,17 @@ async function main() {
   });
 
   fastify.post("/convert", async (request, reply) => {
-    const { fileId, fileIds, sourceExt, targetExt } = request.body || {};
+    const { fileId, fileIds, sourceExt, targetExt, fileNames } = request.body || {};
     const idList = Array.isArray(fileIds) ? fileIds : fileId ? [fileId] : [];
+    // Optional map of fileId -> original filename, sent by the client from
+    // its own upload-time record (the server never stores these — see the
+    // matching pattern already used for download filenames below). Used so
+    // engines that can leak the on-disk name (e.g. LibreOffice's dynamic
+    // &[File] header/footer field) open the file under something sensible
+    // instead of the raw fileId. Purely advisory — never trust for anything
+    // beyond display/passthrough.
+    const safeFileNames =
+      fileNames && typeof fileNames === "object" ? fileNames : {};
 
     if (idList.length === 0 || !sourceExt || !targetExt) {
       return reply.code(400).send({
@@ -239,6 +248,8 @@ async function main() {
         tempDir,
         `${id}-out.${targetExt.replace(/^\./, "")}`,
       ),
+      originalName:
+        typeof safeFileNames[id] === "string" ? safeFileNames[id] : null,
     }));
 
     const missing = jobFiles.filter((f) => !fs.existsSync(f.inputPath));
@@ -263,13 +274,21 @@ async function main() {
     const jobId = createJob();
     const isBatch = idList.length > 1;
 
-    async function convertOne(inputPath, outputPath) {
+    async function convertOne(inputPath, outputPath, originalName = null) {
       if (engine === "asciidoc") {
         await convertAsciidoc(inputPath, outputPath);
       } else if (engine === "pandoc") {
         const fromFormat = toPandocFormat(sourceExt);
         const toFormat = toPandocFormat(targetExt);
         const extraArgs = fromFormat === "bibtex" ? ["--citeproc"] : [];
+        // PDF output defaults to pdflatex, which is fragile against
+        // arbitrary/technical markdown (code blocks, JSON, curl examples,
+        // stray $ _ ^ ~ characters trip LaTeX math-mode parsing). Route
+        // through weasyprint instead — an HTML/CSS renderer that doesn't
+        // have this failure mode. See DECISIONS.md.
+        if (toFormat === "pdf") {
+          extraArgs.push("--pdf-engine=weasyprint");
+        }
         await convertWithPandoc(
           inputPath,
           outputPath,
@@ -279,7 +298,13 @@ async function main() {
         );
       } else if (engine === "libreoffice") {
         const targetFormat = targetExt.replace(/^\./, "").toLowerCase();
-        await convertWithLibreOffice(inputPath, outputPath, targetFormat);
+        await convertWithLibreOffice(
+          inputPath,
+          outputPath,
+          targetFormat,
+          null,
+          originalName,
+        );
       } else if (engine === "data") {
         // json -> xlsx is the one "data" engine pair that isn't a direct
         // pure-JS conversion — LibreOffice can't import raw JSON, so this
@@ -351,7 +376,12 @@ async function main() {
         // existing callers/tests (and /download/:jobId) are unaffected.
         try {
           const extra = await runJob(
-            () => convertOne(jobFiles[0].inputPath, jobFiles[0].outputPath),
+            () =>
+              convertOne(
+                jobFiles[0].inputPath,
+                jobFiles[0].outputPath,
+                jobFiles[0].originalName,
+              ),
             tier,
           );
           markDone(jobId, {
@@ -373,7 +403,7 @@ async function main() {
       for (const f of jobFiles) {
         try {
           const extra = await runJob(
-            () => convertOne(f.inputPath, f.outputPath),
+            () => convertOne(f.inputPath, f.outputPath, f.originalName),
             tier,
           );
           results.push({
@@ -450,6 +480,20 @@ async function main() {
       const archiver = require("archiver");
       const archive = archiver("zip", { zlib: { level: 9 } });
 
+      // Optional ?names=<url-encoded JSON map of fileId -> desired filename>,
+      // sent by the client from its own upload-time record of original
+      // filenames (the server never stores these). Falls back to fileId-based
+      // names if absent or malformed — never trust this for anything beyond
+      // display, so no validation beyond a safe parse.
+      let nameMap = {};
+      if (request.query.names) {
+        try {
+          nameMap = JSON.parse(request.query.names);
+        } catch {
+          nameMap = {};
+        }
+      }
+
       reply.header(
         "Content-Disposition",
         `attachment; filename="converthub-batch-${jobId}.zip"`,
@@ -466,7 +510,11 @@ async function main() {
 
       for (const f of successFiles) {
         const ext = f.targetExt || "pdf";
-        archive.file(f.outputPath, { name: `${f.fileId}.${ext}` });
+        const safeName =
+          typeof nameMap[f.fileId] === "string" && nameMap[f.fileId].trim()
+            ? nameMap[f.fileId].replace(/["\r\n/\\]/g, "_")
+            : `${f.fileId}.${ext}`;
+        archive.file(f.outputPath, { name: safeName });
       }
 
       archive.finalize();
@@ -482,7 +530,12 @@ async function main() {
         .send({ error: "File has expired or was already deleted" });
     }
 
-    const downloadName = `converted-${fileId}.${targetExt}`;
+    // Optional ?filename=<desired name>, same origin as the batch case above.
+    const requestedName =
+      typeof request.query.filename === "string" && request.query.filename.trim()
+        ? request.query.filename.replace(/["\r\n/\\]/g, "_")
+        : null;
+    const downloadName = requestedName || `converted-${fileId}.${targetExt}`;
     reply.header(
       "Content-Disposition",
       `attachment; filename="${downloadName}"`,
