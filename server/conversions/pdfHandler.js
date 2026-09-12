@@ -17,6 +17,15 @@ const { promisify } = require("util");
 const fs = require("fs/promises");
 const execFileAsync = promisify(execFile);
 
+// qpdf --json can emit well over Node's default 1MB stdout cap on anything
+// but a small/simple PDF (it dumps the full object structure). Route every
+// qpdf call through this wrapper instead of calling execFileAsync directly,
+// so a large-but-valid PDF never gets misreported as unreadable.
+const QPDF_MAX_BUFFER = 100 * 1024 * 1024; // 100MB
+function runQpdf(args) {
+  return execFileAsync("qpdf", args, { maxBuffer: QPDF_MAX_BUFFER });
+}
+
 /**
  * pdf.js's getOperatorList()/commonObjs never populates font descriptor
  * flags (bold/italic) for this build — confirmed via diagnostic logging,
@@ -288,6 +297,60 @@ function stripTrailingPageNumber(pageText) {
   return lines.join("\n");
 }
 
+
+// PDF dates are stored per-spec as "D:YYYYMMDDHHmmSSOHH'mm'" (e.g.
+// "D:20230415120000+00'00'"), not a normal timestamp — this parses that
+// format into a human-readable string. Falls back to the raw string if it
+// doesn't match (rather than hiding it), since a slightly odd date is more
+// useful than no date at all.
+function formatPdfDate(raw) {
+  if (!raw) return null;
+  const match =
+    /^D:(\d{4})(\d{2})?(\d{2})?(\d{2})?(\d{2})?(\d{2})?([Z+-])?(\d{2})?'?(\d{2})?'?/.exec(
+      raw,
+    );
+  if (!match) return raw;
+
+  const [
+    ,
+    year,
+    month = "01",
+    day = "01",
+    hour = "00",
+    minute = "00",
+    second = "00",
+    tzSign,
+    tzHour,
+    tzMinute,
+  ] = match;
+
+  const date = new Date(
+    Date.UTC(
+      Number(year),
+      Number(month) - 1,
+      Number(day),
+      Number(hour),
+      Number(minute),
+      Number(second),
+    ),
+  );
+
+  if (tzSign && tzSign !== "Z" && tzHour) {
+    const offsetMinutes =
+      (Number(tzHour) * 60 + Number(tzMinute || 0)) * (tzSign === "-" ? -1 : 1);
+    date.setUTCMinutes(date.getUTCMinutes() - offsetMinutes);
+  }
+
+  return date.toLocaleString("en-US", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZoneName: "short",
+  });
+}
+
 // Normalizes common bullet glyphs into markdown list syntax, and ensures a
 // blank line precedes the first item of a run (Pandoc requires a blank
 // line before a list to recognize it as one, not a paragraph).
@@ -330,7 +393,7 @@ const MAX_PDF_PAGES = 2000;
 async function validatePdf(inputPath) {
   let checkOut = "";
   try {
-    const result = await execFileAsync("qpdf", ["--check", inputPath]);
+    const result = await runQpdf(["--check", inputPath]);
     checkOut = result.stdout;
   } catch (err) {
     // qpdf --check exits non-zero for both recoverable warnings and hard
@@ -354,7 +417,7 @@ async function validatePdf(inputPath) {
       !checkOut
     ) {
       throw new Error(
-        `File is not a valid PDF or is corrupted: ${stderr.trim() || err.message}`,
+        "File is not a valid PDF or is corrupted. Please try a different file.",
       );
     }
   }
@@ -371,10 +434,7 @@ async function validatePdf(inputPath) {
   }
 
   try {
-    const { stdout: jsonOut } = await execFileAsync("qpdf", [
-      "--json",
-      inputPath,
-    ]);
+    const { stdout: jsonOut } = await runQpdf(["--json", inputPath]);
     const parsed = JSON.parse(jsonOut);
     const pageCount = parsed.pages ? parsed.pages.length : 0;
     if (pageCount > MAX_PDF_PAGES) {
@@ -385,6 +445,11 @@ async function validatePdf(inputPath) {
   } catch (err) {
     if (err.message.includes("exceeding the")) {
       throw err; // our own page-limit error, re-throw as-is
+    }
+    if (err.code === "ENOBUFS" || /maxBuffer/i.test(err.message)) {
+      throw new Error(
+        "This PDF's internal structure is too large to inspect. Try a smaller or simpler file.",
+      );
     }
     throw new Error(`Could not read PDF structure: ${err.message}`);
   }
@@ -402,13 +467,7 @@ async function mergePdfs(inputPaths, outputPath) {
     throw new Error("Merge requires at least 2 PDF files.");
   }
   try {
-    await execFileAsync("qpdf", [
-      "--empty",
-      "--pages",
-      ...inputPaths,
-      "--",
-      outputPath,
-    ]);
+    await runQpdf(["--empty", "--pages", ...inputPaths, "--", outputPath]);
   } catch (err) {
     const detail = err.stderr ? err.stderr.trim() : err.message;
     throw new Error(`PDF merge failed: ${detail}`);
@@ -423,16 +482,32 @@ async function mergePdfs(inputPaths, outputPath) {
  * @param {string} pageRange - qpdf page range syntax, e.g. "1-3", "1,3,5", "2-z"
  * @returns {Promise<void>}
  */
+async function getPageCount(inputPath) {
+  const { stdout: jsonOut } = await runQpdf(["--json", inputPath]);
+  const parsed = JSON.parse(jsonOut);
+  return parsed.pages ? parsed.pages.length : 0;
+}
+
 async function splitPdf(inputPath, outputPath, pageRange) {
+  const pageCount = await getPageCount(inputPath);
+
+  const numericPages = pageRange
+    .split(",")
+    .flatMap((part) => part.split("-"))
+    .filter((p) => /^\d+$/.test(p))
+    .map(Number);
+
+  const outOfRange = [...new Set(numericPages.filter((p) => p < 1 || p > pageCount))];
+  if (outOfRange.length > 0) {
+    throw new Error(
+      `Page ${outOfRange.join(", ")} ${
+        outOfRange.length > 1 ? "don't" : "doesn't"
+      } exist — this PDF has ${pageCount} page${pageCount !== 1 ? "s" : ""}.`,
+    );
+  }
+
   try {
-    await execFileAsync("qpdf", [
-      inputPath,
-      "--pages",
-      ".",
-      pageRange,
-      "--",
-      outputPath,
-    ]);
+    await runQpdf([inputPath, "--pages", ".", pageRange, "--", outputPath]);
   } catch (err) {
     const detail = err.stderr ? err.stderr.trim() : err.message;
     throw new Error(`PDF split failed: ${detail}`);
@@ -448,7 +523,7 @@ async function splitPdf(inputPath, outputPath, pageRange) {
  */
 async function compressPdf(inputPath, outputPath) {
   try {
-    await execFileAsync("qpdf", [
+    await runQpdf([
       "--optimize-images",
       "--compress-streams=y",
       "--object-streams=generate",
@@ -467,10 +542,7 @@ async function compressPdf(inputPath, outputPath) {
  * @returns {Promise<object>} - { pageCount, pdfVersion, encrypted, linearized, embeddedFonts }
  */
 async function getStructuralInfo(inputPath) {
-  const { stdout: jsonOut } = await execFileAsync("qpdf", [
-    "--json",
-    inputPath,
-  ]);
+  const { stdout: jsonOut } = await runQpdf(["--json", inputPath]);
   const parsed = JSON.parse(jsonOut);
 
   const pageCount = parsed.pages ? parsed.pages.length : 0;
@@ -494,10 +566,7 @@ async function getStructuralInfo(inputPath) {
   // short-circuit before we've read stdout.
   let linearized = false;
   try {
-    const { stdout: checkOut } = await execFileAsync("qpdf", [
-      "--check",
-      inputPath,
-    ]);
+    const { stdout: checkOut } = await runQpdf(["--check", inputPath]);
     linearized = /is linearized/i.test(checkOut);
   } catch (err) {
     // qpdf --check can exit non-zero for recoverable warnings while still
@@ -546,7 +615,7 @@ async function getTextAndMetadata(inputPath) {
     text,
     author: data.info?.Author || null,
     title: data.info?.Title || null,
-    createdDate: data.info?.CreationDate || null,
+    createdDate: formatPdfDate(data.info?.CreationDate),
     ocrUsed,
   };
 }
@@ -662,7 +731,7 @@ async function analyzePdf(inputPath) {
  *
  * @param {string} pathA - absolute path to first PDF
  * @param {string} pathB - absolute path to second PDF
- * @returns {Promise<object>} - { identical, linesOnlyInA, linesOnlyInB }
+ * @returns {Promise<object>} - { identical, similarity, diff }
  */
 const { diffLines } = require("diff");
 
@@ -685,22 +754,31 @@ async function comparePdfs(pathA, pathB) {
 
   const changes = diffLines(textA, textB);
 
-  const linesOnlyInA = [];
-  const linesOnlyInB = [];
+  const diff = [];
+  let unchangedCount = 0;
+  let removedCount = 0;
+  let addedCount = 0;
 
   for (const part of changes) {
     const lines = part.value.split("\n").filter(Boolean);
-    if (part.removed) {
-      linesOnlyInA.push(...lines);
-    } else if (part.added) {
-      linesOnlyInB.push(...lines);
-    }
+    const type = part.added ? "added" : part.removed ? "removed" : "unchanged";
+    if (type === "unchanged") unchangedCount += lines.length;
+    else if (type === "removed") removedCount += lines.length;
+    else addedCount += lines.length;
+    diff.push({ type, lines });
   }
 
+  const totalA = unchangedCount + removedCount;
+  const totalB = unchangedCount + addedCount;
+  const similarity =
+    totalA + totalB === 0
+      ? 100
+      : Math.round((unchangedCount * 2 * 100) / (totalA + totalB));
+
   return {
-    identical: linesOnlyInA.length === 0 && linesOnlyInB.length === 0,
-    linesOnlyInA,
-    linesOnlyInB,
+    identical: removedCount === 0 && addedCount === 0,
+    similarity,
+    diff,
   };
 }
 

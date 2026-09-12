@@ -39,8 +39,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Python/Ruby language-package-manager installs (separate layer from apt
 # for caching/debugging clarity — these aren't apt packages)
-RUN pip3 install --no-cache-dir --break-system-packages nbconvert \
+RUN pip3 install --no-cache-dir --break-system-packages nbconvert weasyprint \
     && gem install asciidoctor --no-document
+
+# Weasyprint/fontconfig builds a system font cache on its first invocation,
+# which can consume most or all of a job's timeout budget in a fresh
+# container (observed: ~8s+ just to fail on a trivial file-not-found error).
+# Warm the cache here at build time so runtime jobs never pay this cost.
+# See DECISIONS.md.
+RUN echo '<html><body>warm</body></html>' > /tmp/warm.html && \
+    weasyprint /tmp/warm.html /tmp/warm.pdf && \
+    rm /tmp/warm.html /tmp/warm.pdf
 
 WORKDIR /app
 

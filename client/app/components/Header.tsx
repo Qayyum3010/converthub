@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
+import { Menu, X } from "lucide-react";
 import Logo from "./Logo";
 import ThemeToggle from "./ThemeToggle";
 
@@ -15,6 +16,7 @@ const navLinks = [
 export default function Header() {
   const pathname = usePathname();
   const [scrolled, setScrolled] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 4);
@@ -22,6 +24,21 @@ export default function Header() {
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
+
+  // Close the mobile menu on route change, so navigating doesn't leave it
+  // open behind the new page.
+  useEffect(() => {
+    setMenuOpen(false);
+  }, [pathname]);
+
+  // Lock body scroll while the mobile menu is open, so the page behind it
+  // doesn't scroll along with the dropdown.
+  useEffect(() => {
+    document.body.style.overflow = menuOpen ? "hidden" : "";
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [menuOpen]);
 
   return (
     <nav
@@ -34,14 +51,15 @@ export default function Header() {
           <Logo className="scale-90 md:scale-100 origin-left" />
         </Link>
 
-        <div className="flex items-center gap-4 md:gap-6">
+        {/* Desktop nav — hidden below md, where it would overflow */}
+        <div className="hidden md:flex items-center gap-6">
           {navLinks.map((link) => {
             const active = pathname === link.href;
             return (
               <Link
                 key={link.href}
                 href={link.href}
-                className={`relative pb-1 text-sm md:text-base font-medium transition-colors duration-200 whitespace-nowrap font-body ${
+                className={`relative pb-1 text-base font-medium transition-colors duration-200 whitespace-nowrap font-body ${
                   active
                     ? "text-route font-semibold"
                     : "text-graphite hover:text-ink"
@@ -57,6 +75,48 @@ export default function Header() {
             );
           })}
           <ThemeToggle />
+        </div>
+
+        {/* Mobile controls — theme toggle stays visible, nav links collapse
+            behind a hamburger */}
+        <div className="flex md:hidden items-center gap-2">
+          <ThemeToggle />
+          <button
+            onClick={() => setMenuOpen((v) => !v)}
+            aria-label={menuOpen ? "Close menu" : "Open menu"}
+            aria-expanded={menuOpen}
+            className="p-2 -mr-2 rounded-md text-graphite hover:text-ink hover:bg-paper-raised transition-colors duration-150"
+          >
+            {menuOpen ? (
+              <X className="w-5 h-5" strokeWidth={2} />
+            ) : (
+              <Menu className="w-5 h-5" strokeWidth={2} />
+            )}
+          </button>
+        </div>
+      </div>
+
+      {/* Mobile menu dropdown */}
+      <div
+        className={`md:hidden overflow-hidden transition-[max-height,opacity] duration-200 ease-in-out border-t border-graphite-light ${
+          menuOpen ? "max-h-64 opacity-100" : "max-h-0 opacity-0 border-t-0"
+        }`}
+      >
+        <div className="flex flex-col px-4 py-2">
+          {navLinks.map((link) => {
+            const active = pathname === link.href;
+            return (
+              <Link
+                key={link.href}
+                href={link.href}
+                className={`py-3 text-base font-medium font-body border-b border-graphite-light last:border-b-0 transition-colors duration-150 ${
+                  active ? "text-route font-semibold" : "text-graphite hover:text-ink"
+                }`}
+              >
+                {link.label}
+              </Link>
+            );
+          })}
         </div>
       </div>
     </nav>

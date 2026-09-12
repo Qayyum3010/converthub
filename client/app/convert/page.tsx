@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Upload, X, AlertTriangle, Lock } from "lucide-react";
 import Header from "../components/Header";
@@ -30,6 +30,15 @@ function extOf(file: File) {
   return file.name.split(".").pop()?.toLowerCase() ?? "";
 }
 
+function sanitizeFilenamePart(name: string) {
+  return name.replace(/["\r\n/\\]/g, "_");
+}
+
+function stripKnownExt(name: string, ext: string) {
+  const re = new RegExp(`\\.${ext}$`, "i");
+  return name.replace(re, "");
+}
+
 export default function ConversionWorkspacePage() {
   return (
     <Suspense>
@@ -39,7 +48,6 @@ export default function ConversionWorkspacePage() {
 }
 
 function ConversionWorkspace() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const { files, presetTargetExt, addFiles, removeFile, setPresetTargetExt, recordFileNames, reset } =
     useConversion();
@@ -48,8 +56,15 @@ function ConversionWorkspace() {
   const [formats, setFormats] = useState<Record<string, string[]> | null>(null);
   const [formatsError, setFormatsError] = useState<string | null>(null);
   const [selectedTarget, setSelectedTarget] = useState<string | null>(presetTargetExt);
-  const [submitState, setSubmitState] = useState<"idle" | "uploading" | "converting" | "error">("idle");
+  const [submitState, setSubmitState] = useState<
+    "idle" | "uploading" | "converting" | "done" | "error"
+  >("idle");
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [currentJobId, setCurrentJobId] = useState<string | null>(null);
+  const [downloadFilename, setDownloadFilename] = useState<string>("");
+  const [batchNameMap, setBatchNameMap] = useState<Record<string, string> | null>(
+    null,
+  );
 
   // Query params from a Browse Formats / popular-pair click (?from=&to=)
   // pre-select a target even before a file is dropped.
@@ -141,17 +156,73 @@ function ConversionWorkspace() {
       const convertData = await convertRes.json();
       if (!convertRes.ok) throw new Error(convertData.error || "Conversion failed to start.");
 
-      router.push(`/job/${convertData.jobId}`);
+      setCurrentJobId(convertData.jobId);
+      await pollJob(convertData.jobId, validFiles, sourceExt, selectedTarget);
     } catch (err) {
       setSubmitState("error");
       setSubmitError(err instanceof Error ? err.message : "Something went wrong.");
     }
   };
 
+  const pollJob = async (
+    jobId: string,
+    submittedFiles: File[],
+    fromExt: string,
+    toExt: string,
+  ): Promise<void> => {
+    const res = await fetch(`${API_URL}/job/${jobId}`);
+    const job = await res.json();
+    if (!res.ok) throw new Error(job.error || "Job lookup failed.");
+
+    if (job.status === "done") {
+      if (Array.isArray(job.result?.files)) {
+        const nameMap: Record<string, string> = {};
+        job.result.files.forEach(
+          (f: { fileId: string; status: string }, i: number) => {
+            if (f.status === "done") {
+              nameMap[f.fileId] = sanitizeFilenamePart(
+                `${stripKnownExt(submittedFiles[i]?.name ?? `file-${i + 1}`, fromExt)}.${toExt}`,
+              );
+            }
+          },
+        );
+        setBatchNameMap(nameMap);
+      } else {
+        setDownloadFilename(
+          sanitizeFilenamePart(
+            `${stripKnownExt(submittedFiles[0]?.name ?? "file", fromExt)}.${toExt}`,
+          ),
+        );
+      }
+      setSubmitState("done");
+      return;
+    }
+    if (job.status === "failed") {
+      throw new Error(job.error || "Conversion failed.");
+    }
+    await new Promise((r) => setTimeout(r, 1500));
+    return pollJob(jobId, submittedFiles, fromExt, toExt);
+  };
+
   const clearAll = useCallback(() => {
     reset();
     setSelectedTarget(null);
+    setSubmitState("idle");
+    setSubmitError(null);
+    setCurrentJobId(null);
+    setDownloadFilename("");
+    setBatchNameMap(null);
   }, [reset]);
+
+  const downloadHref = currentJobId
+    ? batchNameMap
+      ? `${API_URL}/download/${currentJobId}?names=${encodeURIComponent(
+          JSON.stringify(batchNameMap),
+        )}`
+      : `${API_URL}/download/${currentJobId}?filename=${encodeURIComponent(
+          downloadFilename,
+        )}`
+    : "";
 
   return (
     <div className="min-h-screen flex flex-col bg-paper">
@@ -177,7 +248,25 @@ function ConversionWorkspace() {
           </div>
         )}
 
-        {files.length === 0 ? (
+        {submitState === "done" ? (
+          <div className="flex flex-col gap-4">
+            <div className="bg-route/10 border border-route/30 text-route rounded-md p-4 flex items-center gap-3 text-sm font-body">
+              Conversion complete.
+            </div>
+            
+            <a  href={downloadHref}
+              className="w-full h-14 rounded-md font-display text-base font-semibold flex items-center justify-center gap-2 bg-route text-on-route hover:bg-route-hover transition-colors duration-150"
+            >
+              Download
+            </a>
+            <button
+              onClick={clearAll}
+              className="font-body text-sm text-route hover:text-route-hover text-left"
+            >
+              ← Convert another file
+            </button>
+          </div>
+        ) : files.length === 0 ? (
           <div
             onDragOver={(e) => e.preventDefault()}
             onDrop={(e) => {
@@ -203,6 +292,11 @@ function ConversionWorkspace() {
               <div className="flex items-center justify-between">
                 <p className="font-body text-sm text-graphite">
                   {validFiles.length} file{validFiles.length !== 1 ? "s" : ""} ready
+                  {sourceExt && (
+                    <span className="ml-2 font-technical text-xs px-2 py-0.5 rounded-full bg-route/10 text-route">
+                      Detected: .{sourceExt}
+                    </span>
+                  )}
                 </p>
                 <button
                   onClick={clearAll}
@@ -310,8 +404,9 @@ function ConversionWorkspace() {
               >
                 {submitState === "uploading" && "Uploading…"}
                 {submitState === "converting" && "Starting conversion…"}
-                {(submitState === "idle" || submitState === "error") &&
+                {submitState === "idle" &&
                   (validFiles.length > 1 ? `Convert ${validFiles.length} files` : "Convert")}
+                {submitState === "error" && "Try again"}
               </button>
 
               <div className="bg-paper-raised border border-graphite-light rounded-md p-4 flex gap-3">

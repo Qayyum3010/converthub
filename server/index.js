@@ -107,11 +107,27 @@ const ALLOWED_EXTENSIONS = new Set([
   ".aac",
 ]);
 
+const FILE_ID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// fileId ends up interpolated directly into a filesystem path in every
+// route below (resolveUploadPath, /convert's jobFiles map). path.join does
+// NOT sandbox to tempDir — a client-supplied fileId containing "../" can
+// resolve outside the uploads directory entirely. Every fileId/fileIds
+// value from a request body MUST pass this check before being used to
+// build a path. Returns the invalid id, or null if all are valid.
+function firstInvalidFileId(ids) {
+  return ids.find((id) => typeof id !== "string" || !FILE_ID_RE.test(id)) ?? null;
+}
+
 async function main() {
   const fastify = require("fastify")({ logger: true });
 
   await fastify.register(require("@fastify/cors"), {
-    origin: process.env.NODE_ENV === "production" ? false : true,
+    origin:
+      process.env.NODE_ENV === "production"
+        ? process.env.FRONTEND_URL || false
+        : true,
   });
 
   await fastify.register(require("@fastify/multipart"), {
@@ -194,6 +210,19 @@ async function main() {
   fastify.post("/convert", async (request, reply) => {
     const { fileId, fileIds, sourceExt, targetExt, fileNames } = request.body || {};
     const idList = Array.isArray(fileIds) ? fileIds : fileId ? [fileId] : [];
+
+    if (idList.length === 0 || !sourceExt || !targetExt) {
+      return reply.code(400).send({
+        error:
+          "fileId (or fileIds array), sourceExt, and targetExt are required",
+      });
+    }
+
+    const badId = firstInvalidFileId(idList);
+    if (badId !== null) {
+      return reply.code(400).send({ error: `Invalid fileId: ${badId}` });
+    }
+
     // Optional map of fileId -> original filename, sent by the client from
     // its own upload-time record (the server never stores these — see the
     // matching pattern already used for download filenames below). Used so
@@ -203,13 +232,6 @@ async function main() {
     // beyond display/passthrough.
     const safeFileNames =
       fileNames && typeof fileNames === "object" ? fileNames : {};
-
-    if (idList.length === 0 || !sourceExt || !targetExt) {
-      return reply.code(400).send({
-        error:
-          "fileId (or fileIds array), sourceExt, and targetExt are required",
-      });
-    }
 
     const validation = validatePair(sourceExt, targetExt);
     if (!validation.valid) {
@@ -562,6 +584,11 @@ async function main() {
       });
     }
 
+    const badId = firstInvalidFileId(fileIds);
+    if (badId !== null) {
+      return reply.code(400).send({ error: `Invalid fileId: ${badId}` });
+    }
+
     const inputPaths = fileIds.map((id) => resolveUploadPath(id, "pdf"));
     for (const p of inputPaths) {
       if (!fs.existsSync(p)) {
@@ -572,7 +599,7 @@ async function main() {
     }
 
     const outputId = crypto.randomUUID();
-const outputPath = path.join(tempDir, `${outputId}-out.pdf`);
+    const outputPath = path.join(tempDir, `${outputId}-out.pdf`);
 
     const jobId = createJob();
 
@@ -594,11 +621,23 @@ const outputPath = path.join(tempDir, `${outputId}-out.pdf`);
   });
 
   fastify.post("/pdf/split", async (request, reply) => {
-    const { fileId, pageRange } = request.body || {};
+    const { fileId } = request.body || {};
+    let { pageRange } = request.body || {};
     if (!fileId || !pageRange) {
       return reply
         .code(400)
         .send({ error: "fileId and pageRange are required" });
+    }
+
+    if (firstInvalidFileId([fileId])) {
+      return reply.code(400).send({ error: `Invalid fileId: ${fileId}` });
+    }
+
+    pageRange = String(pageRange).replace(/\s+/g, "");
+    if (!/^[0-9zZ,-]+$/.test(pageRange)) {
+      return reply
+        .code(400)
+        .send({ error: "pageRange contains invalid characters" });
     }
 
     const inputPath = resolveUploadPath(fileId, "pdf");
@@ -639,6 +678,11 @@ const outputPath = path.join(tempDir, `${outputId}-out.pdf`);
       return reply
         .code(400)
         .send({ error: "fileId (or fileIds array) is required" });
+    }
+
+    const badId = firstInvalidFileId(idList);
+    if (badId !== null) {
+      return reply.code(400).send({ error: `Invalid fileId: ${badId}` });
     }
 
     const jobFiles = idList.map((id) => ({
@@ -721,6 +765,10 @@ const outputPath = path.join(tempDir, `${outputId}-out.pdf`);
       return reply.code(400).send({ error: "fileId is required" });
     }
 
+    if (firstInvalidFileId([fileId])) {
+      return reply.code(400).send({ error: `Invalid fileId: ${fileId}` });
+    }
+
     const inputPath = resolveUploadPath(fileId, "pdf");
     if (!fs.existsSync(inputPath)) {
       return reply
@@ -751,6 +799,12 @@ const outputPath = path.join(tempDir, `${outputId}-out.pdf`);
       return reply
         .code(400)
         .send({ error: "fileIdA and fileIdB are required" });
+    }
+
+    if (firstInvalidFileId([fileIdA, fileIdB])) {
+      return reply
+        .code(400)
+        .send({ error: "Invalid fileIdA or fileIdB." });
     }
 
     const pathA = resolveUploadPath(fileIdA, "pdf");
