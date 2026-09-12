@@ -41,3 +41,11 @@ client/.env.local
 # Large binary test fixtures (not needed in version control — see
 # DECISIONS.md Task 5.10.6 for how to regenerate/redownload if needed)
 test-fixtures/sample.iso
+# Test scripts (one-off verification runs, not shipped)
+/run-*.sh
+/full-registry-test.sh
+/cls
+
+# Large test fixture library (not shipped — see DECISIONS.md for how to
+# regenerate if needed)
+/test-fixtures/
