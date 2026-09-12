@@ -516,9 +516,14 @@ async function main() {
         }
       }
 
+      const batchTargetExt = successFiles[0]?.targetExt || "converted";
+      const zipFilename = `converthub-${successFiles.length}-${batchTargetExt}-file${
+        successFiles.length !== 1 ? "s" : ""
+      }.zip`;
+
       reply.header(
         "Content-Disposition",
-        `attachment; filename="converthub-batch-${jobId}.zip"`,
+        `attachment; filename="${zipFilename}"`,
       );
       reply.header("Content-Type", "application/zip");
 
