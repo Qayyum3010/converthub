@@ -49,3 +49,19 @@ test-fixtures/sample.iso
 # Large test fixture library (not shipped — see DECISIONS.md for how to
 # regenerate if needed)
 /test-fixtures/
+
+# More stray test scripts/artifacts
+/build-fixtures.sh
+/full-backend-test.sh
+/test-pdf-tools.sh
+server/test*.pdf
+server/test*.png
+server/test*.docx
+
+# More stray test scripts/artifacts
+/build-fixtures.sh
+/full-backend-test.sh
+/test-pdf-tools.sh
+server/test*.pdf
+server/test*.png
+server/test*.docx
