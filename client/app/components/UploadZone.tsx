@@ -11,7 +11,7 @@ export default function UploadZone() {
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
-  const { setFile } = useConversion();
+  const { addFiles } = useConversion();
 
   const handleFiles = useCallback(
     (files: FileList | null) => {
@@ -24,10 +24,10 @@ export default function UploadZone() {
       }
 
       setError(null);
-      setFile(file);
+      addFiles([file]);
       router.push("/convert");
     },
-    [setFile, router],
+    [addFiles, router],
   );
 
   const onDrop = useCallback(
